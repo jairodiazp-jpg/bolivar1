@@ -1,149 +1,220 @@
 import { type NextRequest, NextResponse } from "next/server"
-
-// Mock database for professionals
-const professionals: any[] = []
+import { getDatabase } from "@/lib/mongodb"
+import { verifyToken } from "@/lib/auth"
+import { sendEmail, generateCredentialsEmailHTML } from "@/lib/email"
 
 export async function GET(request: NextRequest) {
   try {
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    const user = verifyToken(token)
+    if (!user) {
+      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
+    const page = Number.parseInt(searchParams.get("page") || "1")
+    const limit = Number.parseInt(searchParams.get("limit") || "20")
+    const search = searchParams.get("search") || ""
     const companyId = searchParams.get("companyId")
-    const search = searchParams.get("search")
     const specialty = searchParams.get("specialty")
 
-    let filteredProfessionals = professionals
+    const db = await getDatabase()
+    const collection = db.collection("professionals")
 
-    if (companyId) {
-      filteredProfessionals = filteredProfessionals.filter((prof) => prof.companyId === Number.parseInt(companyId))
+    // Build query
+    const query: any = {}
+
+    if (user.type === "empresa" && user.companyId) {
+      query.companyId = user.companyId
+    } else if (companyId) {
+      query.companyId = Number.parseInt(companyId)
     }
 
     if (search) {
-      filteredProfessionals = filteredProfessionals.filter(
-        (prof) =>
-          prof.name.toLowerCase().includes(search.toLowerCase()) ||
-          prof.email.toLowerCase().includes(search.toLowerCase()),
-      )
+      query.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { specialty: { $regex: search, $options: "i" } },
+      ]
     }
 
     if (specialty) {
-      filteredProfessionals = filteredProfessionals.filter((prof) => prof.specialty === specialty)
+      query.specialty = specialty
     }
 
+    const skip = (page - 1) * limit
+    const professionals = await collection.find(query).skip(skip).limit(limit).toArray()
+
+    const total = await collection.countDocuments(query)
+
     return NextResponse.json({
-      success: true,
-      data: filteredProfessionals,
-      total: filteredProfessionals.length,
+      professionals,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
     })
   } catch (error) {
     console.error("Error fetching professionals:", error)
-    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { name, specialty, email, phone, companyId, status = "active", weeklyHours = 40 } = body
-
-    // Validate required fields
-    if (!name || !specialty || !email || !phone) {
-      return NextResponse.json({ success: false, error: "Todos los campos son requeridos" }, { status: 400 })
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
+
+    const user = verifyToken(token)
+    if (!user || (user.type !== "admin" && user.type !== "empresa")) {
+      return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const { name, specialty, email, phone, companyId, weeklyHours } = body
+
+    if (!name || !specialty || !email || !phone) {
+      return NextResponse.json({ error: "Campos requeridos: name, specialty, email, phone" }, { status: 400 })
+    }
+
+    const db = await getDatabase()
+    const collection = db.collection("professionals")
 
     // Check if email already exists
-    const existingProfessional = professionals.find((prof) => prof.email === email)
+    const existingProfessional = await collection.findOne({ email })
     if (existingProfessional) {
-      return NextResponse.json({ success: false, error: "El email ya está registrado" }, { status: 400 })
+      return NextResponse.json({ error: "Ya existe un profesional con este email" }, { status: 400 })
     }
 
-    // Create new professional
-    const newProfessional = {
-      id: professionals.length + 1,
+    // Generate credentials
+    const username = email.split("@")[0]
+    const password = Math.random().toString(36).slice(-8)
+
+    const professional = {
       name,
       specialty,
       email,
       phone,
-      companyId: companyId || 1,
-      status,
-      weeklyHours,
-      rating: (Math.random() * 1.5 + 3.5).toFixed(1),
-      totalHoursThisMonth: Math.floor(Math.random() * 80) + 120,
-      createdAt: new Date().toISOString(),
+      companyId: user.type === "empresa" ? user.companyId : companyId,
+      weeklyHours: weeklyHours || 40,
+      status: "active",
+      rating: "5.0",
+      totalHoursThisMonth: 0,
+      credentials: {
+        username,
+        password,
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }
 
-    professionals.push(newProfessional)
+    const result = await collection.insertOne(professional)
+
+    // Send credentials email
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Credenciales de Acceso - MediSchedule",
+        html: generateCredentialsEmailHTML({
+          name,
+          specialty,
+          companyName: "Hospital",
+          credentials: { username, password },
+        }),
+      })
+    } catch (emailError) {
+      console.error("Error sending credentials email:", emailError)
+    }
 
     return NextResponse.json({
       success: true,
-      data: newProfessional,
-      message: "Profesional creado exitosamente",
+      professional: { ...professional, _id: result.insertedId },
     })
   } catch (error) {
     console.error("Error creating professional:", error)
-    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    const user = verifyToken(token)
+    if (!user) {
+      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
+    }
+
     const body = await request.json()
-    const { id, name, specialty, email, phone, status, weeklyHours } = body
+    const { id, ...updateData } = body
 
     if (!id) {
-      return NextResponse.json({ success: false, error: "ID es requerido" }, { status: 400 })
+      return NextResponse.json({ error: "ID requerido" }, { status: 400 })
     }
 
-    const professionalIndex = professionals.findIndex((prof) => prof.id === id)
-    if (professionalIndex === -1) {
-      return NextResponse.json({ success: false, error: "Profesional no encontrado" }, { status: 404 })
+    const db = await getDatabase()
+    const collection = db.collection("professionals")
+
+    const updateFields = {
+      ...updateData,
+      updatedAt: new Date(),
     }
 
-    // Update professional
-    professionals[professionalIndex] = {
-      ...professionals[professionalIndex],
-      name: name || professionals[professionalIndex].name,
-      specialty: specialty || professionals[professionalIndex].specialty,
-      email: email || professionals[professionalIndex].email,
-      phone: phone || professionals[professionalIndex].phone,
-      status: status || professionals[professionalIndex].status,
-      weeklyHours: weeklyHours || professionals[professionalIndex].weeklyHours,
-      updatedAt: new Date().toISOString(),
+    const result = await collection.updateOne({ _id: id }, { $set: updateFields })
+
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: "Profesional no encontrado" }, { status: 404 })
     }
 
-    return NextResponse.json({
-      success: true,
-      data: professionals[professionalIndex],
-      message: "Profesional actualizado exitosamente",
-    })
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error updating professional:", error)
-    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    const user = verifyToken(token)
+    if (!user || user.type !== "admin") {
+      return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get("id")
 
     if (!id) {
-      return NextResponse.json({ success: false, error: "ID es requerido" }, { status: 400 })
+      return NextResponse.json({ error: "ID requerido" }, { status: 400 })
     }
 
-    const professionalIndex = professionals.findIndex((prof) => prof.id === Number.parseInt(id))
-    if (professionalIndex === -1) {
-      return NextResponse.json({ success: false, error: "Profesional no encontrado" }, { status: 404 })
+    const db = await getDatabase()
+    const collection = db.collection("professionals")
+
+    const result = await collection.deleteOne({ _id: id })
+
+    if (result.deletedCount === 0) {
+      return NextResponse.json({ error: "Profesional no encontrado" }, { status: 404 })
     }
 
-    // Remove professional
-    const deletedProfessional = professionals.splice(professionalIndex, 1)[0]
-
-    return NextResponse.json({
-      success: true,
-      data: deletedProfessional,
-      message: "Profesional eliminado exitosamente",
-    })
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting professional:", error)
-    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

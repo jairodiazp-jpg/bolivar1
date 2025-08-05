@@ -1,176 +1,243 @@
 import { type NextRequest, NextResponse } from "next/server"
-
-// Mock appointments data
-const appointments: any[] = [
-  {
-    id: 1,
-    patientName: "Juan Pérez",
-    professionalName: "Dr. Carlos Mendoza",
-    specialty: "Cardiología",
-    date: "2024-01-15",
-    time: "09:00",
-    status: "confirmed",
-    companyId: 1,
-    professionalId: 1,
-    notes: "Consulta de control",
-  },
-  {
-    id: 2,
-    patientName: "María García",
-    professionalName: "Dra. Ana López",
-    specialty: "Pediatría",
-    date: "2024-01-15",
-    time: "10:30",
-    status: "pending",
-    companyId: 1,
-    professionalId: 2,
-    notes: "Primera consulta",
-  },
-]
+import { getDatabase } from "@/lib/mongodb"
+import { verifyToken } from "@/lib/auth"
+import { sendEmail, generateAppointmentEmailHTML } from "@/lib/email"
+import { sendWhatsAppMessage, formatAppointmentWhatsApp } from "@/lib/twilio"
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const companyId = searchParams.get("companyId")
-    const professionalId = searchParams.get("professionalId")
-    const date = searchParams.get("date")
-    const status = searchParams.get("status")
-
-    let filteredAppointments = appointments
-
-    if (companyId) {
-      filteredAppointments = filteredAppointments.filter((apt) => apt.companyId === Number.parseInt(companyId))
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    if (professionalId) {
-      filteredAppointments = filteredAppointments.filter(
-        (apt) => apt.professionalId === Number.parseInt(professionalId),
-      )
+    const user = verifyToken(token)
+    if (!user) {
+      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const page = Number.parseInt(searchParams.get("page") || "1")
+    const limit = Number.parseInt(searchParams.get("limit") || "20")
+    const date = searchParams.get("date")
+    const doctorId = searchParams.get("doctorId")
+    const status = searchParams.get("status")
+    const companyId = searchParams.get("companyId")
+
+    const db = await getDatabase()
+    const collection = db.collection("appointments")
+
+    // Build query based on user type
+    const query: any = {}
+
+    if (user.type === "profesional") {
+      query.doctorId = user.userId
+    } else if (user.type === "empresa" && user.companyId) {
+      query.companyId = user.companyId
+    } else if (companyId) {
+      query.companyId = Number.parseInt(companyId)
     }
 
     if (date) {
-      filteredAppointments = filteredAppointments.filter((apt) => apt.date === date)
+      query.date = date
+    }
+
+    if (doctorId) {
+      query.doctorId = Number.parseInt(doctorId)
     }
 
     if (status) {
-      filteredAppointments = filteredAppointments.filter((apt) => apt.status === status)
+      query.status = status
     }
 
+    const skip = (page - 1) * limit
+    const appointments = await collection.find(query).sort({ date: -1, time: 1 }).skip(skip).limit(limit).toArray()
+
+    const total = await collection.countDocuments(query)
+
     return NextResponse.json({
-      success: true,
-      data: filteredAppointments,
-      total: filteredAppointments.length,
+      appointments,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
     })
   } catch (error) {
     console.error("Error fetching appointments:", error)
-    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { patientName, professionalId, professionalName, specialty, date, time, notes, companyId } = body
-
-    // Validate required fields
-    if (!patientName || !professionalId || !date || !time) {
-      return NextResponse.json({ success: false, error: "Todos los campos son requeridos" }, { status: 400 })
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
+
+    const user = verifyToken(token)
+    if (!user) {
+      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const {
+      patientName,
+      patientEmail,
+      patientPhone,
+      doctorId,
+      doctorName,
+      specialty,
+      date,
+      time,
+      duration,
+      type,
+      notes,
+      location,
+      companyId,
+    } = body
+
+    if (!patientName || !patientEmail || !doctorId || !date || !time) {
+      return NextResponse.json(
+        { error: "Campos requeridos: patientName, patientEmail, doctorId, date, time" },
+        { status: 400 },
+      )
+    }
+
+    const db = await getDatabase()
+    const collection = db.collection("appointments")
 
     // Check for conflicts
-    const existingAppointment = appointments.find(
-      (apt) => apt.professionalId === professionalId && apt.date === date && apt.time === time,
-    )
+    const conflictingAppointment = await collection.findOne({
+      doctorId,
+      date,
+      time,
+      status: { $in: ["confirmed", "pending"] },
+    })
 
-    if (existingAppointment) {
-      return NextResponse.json({ success: false, error: "Ya existe una cita en esa fecha y hora" }, { status: 400 })
+    if (conflictingAppointment) {
+      return NextResponse.json({ error: "Ya existe una cita en esa fecha y hora" }, { status: 400 })
     }
 
-    // Create new appointment
-    const newAppointment = {
-      id: appointments.length + 1,
+    const appointment = {
       patientName,
-      professionalId,
-      professionalName: professionalName || "Dr. Profesional",
+      patientEmail,
+      patientPhone: patientPhone || "",
+      doctorId,
+      doctorName: doctorName || "Dr. Desconocido",
       specialty: specialty || "Medicina General",
       date,
       time,
+      duration: duration || 30,
+      type: type || "Consulta",
       status: "confirmed",
-      companyId: companyId || 1,
       notes: notes || "",
-      createdAt: new Date().toISOString(),
+      location: location || "Consultorio",
+      companyId: user.type === "empresa" ? user.companyId : companyId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }
 
-    appointments.push(newAppointment)
+    const result = await collection.insertOne(appointment)
+
+    // Send confirmation email
+    try {
+      await sendEmail({
+        to: patientEmail,
+        subject: "Confirmación de Cita Médica - MediSchedule",
+        html: generateAppointmentEmailHTML(appointment),
+      })
+    } catch (emailError) {
+      console.error("Error sending confirmation email:", emailError)
+    }
+
+    // Send WhatsApp notification if phone is provided
+    if (patientPhone) {
+      try {
+        await sendWhatsAppMessage({
+          to: patientPhone,
+          message: formatAppointmentWhatsApp(appointment),
+        })
+      } catch (whatsappError) {
+        console.error("Error sending WhatsApp:", whatsappError)
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      data: newAppointment,
-      message: "Cita creada exitosamente",
+      appointment: { ...appointment, _id: result.insertedId },
     })
   } catch (error) {
     console.error("Error creating appointment:", error)
-    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    const user = verifyToken(token)
+    if (!user) {
+      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
+    }
+
     const body = await request.json()
-    const { id, status, notes } = body
+    const { id, status, ...updateData } = body
 
     if (!id) {
-      return NextResponse.json({ success: false, error: "ID es requerido" }, { status: 400 })
+      return NextResponse.json({ error: "ID requerido" }, { status: 400 })
     }
 
-    const appointmentIndex = appointments.findIndex((apt) => apt.id === id)
-    if (appointmentIndex === -1) {
-      return NextResponse.json({ success: false, error: "Cita no encontrada" }, { status: 404 })
+    const db = await getDatabase()
+    const collection = db.collection("appointments")
+
+    const updateFields = {
+      ...updateData,
+      updatedAt: new Date(),
     }
 
-    // Update appointment
-    appointments[appointmentIndex] = {
-      ...appointments[appointmentIndex],
-      status: status || appointments[appointmentIndex].status,
-      notes: notes || appointments[appointmentIndex].notes,
-      updatedAt: new Date().toISOString(),
+    if (status) {
+      updateFields.status = status
     }
 
-    return NextResponse.json({
-      success: true,
-      data: appointments[appointmentIndex],
-      message: "Cita actualizada exitosamente",
-    })
+    const result = await collection.updateOne({ _id: id }, { $set: updateFields })
+
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: "Cita no encontrada" }, { status: 404 })
+    }
+
+    // If status changed, send notification
+    if (status) {
+      const appointment = await collection.findOne({ _id: id })
+      if (appointment && appointment.patientEmail) {
+        try {
+          let subject = "Actualización de Cita Médica"
+          if (status === "cancelled") {
+            subject = "Cita Cancelada - MediSchedule"
+          } else if (status === "confirmed") {
+            subject = "Cita Confirmada - MediSchedule"
+          }
+
+          await sendEmail({
+            to: appointment.patientEmail,
+            subject,
+            html: generateAppointmentEmailHTML({ ...appointment, status }),
+          })
+        } catch (emailError) {
+          console.error("Error sending status update email:", emailError)
+        }
+      }
+    }
+
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error updating appointment:", error)
-    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get("id")
-
-    if (!id) {
-      return NextResponse.json({ success: false, error: "ID es requerido" }, { status: 400 })
-    }
-
-    const appointmentIndex = appointments.findIndex((apt) => apt.id === Number.parseInt(id))
-    if (appointmentIndex === -1) {
-      return NextResponse.json({ success: false, error: "Cita no encontrada" }, { status: 404 })
-    }
-
-    // Remove appointment
-    const deletedAppointment = appointments.splice(appointmentIndex, 1)[0]
-
-    return NextResponse.json({
-      success: true,
-      data: deletedAppointment,
-      message: "Cita eliminada exitosamente",
-    })
-  } catch (error) {
-    console.error("Error deleting appointment:", error)
-    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

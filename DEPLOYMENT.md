@@ -1,92 +1,312 @@
-# Despliegue en Vercel - MediSchedule
+# Guía de Despliegue - Sistema de Agendamiento Médico
 
-## Pasos para desplegar
+## 🚀 Despliegue en Vercel (Recomendado)
 
-### 1. Preparar el repositorio
+### Paso 1: Preparar el Repositorio
+
+1. **Subir código a GitHub**:
 \`\`\`bash
-git init
 git add .
-git commit -m "Initial commit - MediSchedule system"
+git commit -m "Initial commit"
+git push origin main
 \`\`\`
 
-### 2. Crear repositorio en GitHub
-1. Ve a GitHub y crea un nuevo repositorio
-2. Conecta tu proyecto local:
-\`\`\`bash
-git remote add origin https://github.com/tu-usuario/medischedule.git
-git branch -M main
-git push -u origin main
-\`\`\`
+### Paso 2: Configurar Vercel
 
-### 3. Desplegar en Vercel
-1. Ve a [vercel.com](https://vercel.com) e inicia sesión
-2. Haz clic en "New Project"
-3. Importa tu repositorio de GitHub
-4. Configura las variables de entorno en el dashboard de Vercel:
+1. **Conectar repositorio**:
+   - Ir a [vercel.com](https://vercel.com)
+   - Click "New Project"
+   - Import desde GitHub
+   - Seleccionar repositorio
 
-#### Variables de Entorno Requeridas:
-\`\`\`
-JWT_SECRET=tu-clave-secreta-jwt-aqui-cambia-en-produccion
-NEXTAUTH_URL=https://tu-proyecto.vercel.app
-NEXTAUTH_SECRET=tu-clave-nextauth-secreta
-\`\`\`
+2. **Configurar variables de entorno**:
+\`\`\`env
+# En Vercel Dashboard → Settings → Environment Variables
 
-#### Variables de Entorno Opcionales (para funcionalidad completa):
-\`\`\`
-MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/medischedule
+# Base de datos
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/medischedule
+
+# JWT
+JWT_SECRET=tu-jwt-secret-super-seguro-cambiar-en-produccion
+
+# Email
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=tu-email@gmail.com
-SMTP_PASS=tu-password-app
-TWILIO_ACCOUNT_SID=tu-twilio-sid
-TWILIO_AUTH_TOKEN=tu-twilio-token
+SMTP_PASS=tu-app-password
+
+# WhatsApp
+TWILIO_ACCOUNT_SID=tu-account-sid
+TWILIO_AUTH_TOKEN=tu-auth-token
 TWILIO_WHATSAPP_NUMBER=+14155238886
+
+# Next.js
+NEXTAUTH_URL=https://tu-app.vercel.app
+NEXTAUTH_SECRET=tu-nextauth-secret
 \`\`\`
 
-### 4. Configuración de Build
-Vercel detectará automáticamente que es un proyecto Next.js y usará la configuración correcta.
+3. **Deploy**:
+   - Click "Deploy"
+   - Esperar build completo
+   - Verificar deployment
 
-### 5. Dominio personalizado (opcional)
-En el dashboard de Vercel, ve a Settings > Domains para configurar un dominio personalizado.
+### Paso 3: Configurar Dominio (Opcional)
 
-## Notas importantes
+1. **Dominio personalizado**:
+   - Vercel Dashboard → Settings → Domains
+   - Agregar dominio
+   - Configurar DNS
 
-### Sin MongoDB
-- El sistema funciona completamente con datos de ejemplo
-- Se generan automáticamente 1000 profesionales y 2000 citas
-- Todas las funcionalidades están disponibles
+## 🗄️ Configuración de Base de Datos
 
-### Con MongoDB
-- Configura MONGODB_URI para persistencia real
-- Los datos se almacenarán en la base de datos
-- Mejor rendimiento y escalabilidad
+### MongoDB Atlas (Recomendado)
 
-### Sin servicios externos
-- Los emails se simulan (se muestran en consola)
-- Los SMS/WhatsApp se simulan
-- Todas las funcionalidades de UI funcionan normalmente
+1. **Crear cuenta**:
+   - Ir a [mongodb.com/atlas](https://www.mongodb.com/atlas)
+   - Registrarse gratis
 
-### Con servicios externos
-- Emails reales vía SMTP
-- SMS/WhatsApp reales vía Twilio
-- Funcionalidad completa de notificaciones
+2. **Crear cluster**:
+   - Seleccionar plan gratuito (M0)
+   - Elegir región cercana
+   - Crear cluster
 
-## Credenciales de prueba
+3. **Configurar acceso**:
+   - Database Access → Add New User
+   - Network Access → Add IP (0.0.0.0/0 para Vercel)
 
-### Admin:
-- Email: admin@medischedule.com
-- Password: admin123
+4. **Obtener connection string**:
+   - Connect → Connect your application
+   - Copiar URI
+   - Reemplazar `<password>` con tu contraseña
 
-### Empresas:
-- Hospital San Rafael: empresa1@medischedule.com / empresa123
-- Clínica Norte: empresa2@medischedule.com / empresa123
+### Alternativa: MongoDB Local
 
-### Profesionales:
-- Cualquier profesional generado automáticamente
-- Password por defecto: medico123
+\`\`\`bash
+# Instalar MongoDB
+brew install mongodb/brew/mongodb-community
 
-## Después del despliegue
-1. Accede a tu URL de Vercel
-2. Usa las credenciales de prueba
-3. Explora todas las funcionalidades
-4. Configura servicios opcionales según necesites
+# Iniciar servicio
+brew services start mongodb/brew/mongodb-community
+
+# URI local
+MONGODB_URI=mongodb://localhost:27017/medischedule
+\`\`\`
+
+## 📧 Configuración de Email
+
+### Gmail (Recomendado)
+
+1. **Habilitar 2FA**:
+   - Google Account → Security
+   - 2-Step Verification → Turn On
+
+2. **Generar App Password**:
+   - Security → App passwords
+   - Select app: Mail
+   - Generate password
+   - Usar password generado en `SMTP_PASS`
+
+### Alternativas
+
+**SendGrid**:
+\`\`\`env
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=587
+SMTP_USER=apikey
+SMTP_PASS=tu-sendgrid-api-key
+\`\`\`
+
+**Mailgun**:
+\`\`\`env
+SMTP_HOST=smtp.mailgun.org
+SMTP_PORT=587
+SMTP_USER=tu-mailgun-user
+SMTP_PASS=tu-mailgun-password
+\`\`\`
+
+## 📱 Configuración de WhatsApp
+
+### Twilio Setup
+
+1. **Crear cuenta Twilio**:
+   - Ir a [twilio.com](https://www.twilio.com)
+   - Registrarse y verificar teléfono
+
+2. **Configurar WhatsApp Sandbox**:
+   - Console → Messaging → Try it out → Send a WhatsApp message
+   - Seguir instrucciones para activar sandbox
+
+3. **Obtener credenciales**:
+   - Account SID y Auth Token desde Console
+   - WhatsApp number del sandbox
+
+### Producción WhatsApp
+
+Para producción, necesitas:
+- Aprobar WhatsApp Business API
+- Configurar webhook
+- Verificar número de negocio
+
+## 🔧 Configuraciones Adicionales
+
+### Headers de Seguridad
+
+El archivo `next.config.js` incluye:
+\`\`\`javascript
+async headers() {
+  return [
+    {
+      source: "/(.*)",
+      headers: [
+        {
+          key: "X-Content-Type-Options",
+          value: "nosniff",
+        },
+        {
+          key: "X-Frame-Options",
+          value: "DENY",
+        },
+        {
+          key: "X-XSS-Protection",
+          value: "1; mode=block",
+        },
+      ],
+    },
+  ]
+}
+\`\`\`
+
+### Optimizaciones de Performance
+
+1. **Compresión habilitada**
+2. **Bundle splitting configurado**
+3. **Imágenes optimizadas**
+4. **Caching headers**
+
+## 🧪 Testing del Deployment
+
+### Verificar Funcionalidades
+
+1. **Login**:
+   - Admin: `admin@medischedule.com` / `admin123`
+   - Empresa: `admin@sanrafael.com` / `sanrafael123`
+
+2. **Base de datos**:
+   - Crear profesional
+   - Verificar almacenamiento
+
+3. **Email**:
+   - Crear profesional
+   - Verificar email de credenciales
+
+4. **WhatsApp**:
+   - Crear cita con teléfono
+   - Verificar mensaje WhatsApp
+
+### Monitoreo
+
+1. **Vercel Analytics**:
+   - Dashboard → Analytics
+   - Monitorear performance
+
+2. **Logs**:
+   - Dashboard → Functions
+   - Revisar logs de API
+
+3. **Uptime**:
+   - Configurar monitoring externo
+   - UptimeRobot, Pingdom, etc.
+
+## 🚨 Troubleshooting
+
+### Build Errors
+
+\`\`\`bash
+# Error de TypeScript
+npm run type-check
+
+# Error de ESLint
+npm run lint
+
+# Build local
+npm run build
+\`\`\`
+
+### Runtime Errors
+
+1. **MongoDB Connection**:
+   - Verificar URI
+   - Verificar IP whitelist
+   - Verificar credenciales
+
+2. **Email Issues**:
+   - Verificar SMTP settings
+   - Verificar App Password
+   - Revisar logs de Vercel
+
+3. **WhatsApp Issues**:
+   - Verificar Twilio credentials
+   - Verificar sandbox status
+   - Verificar formato de número
+
+### Performance Issues
+
+1. **Slow API responses**:
+   - Optimizar queries MongoDB
+   - Implementar caching
+   - Revisar índices de DB
+
+2. **Large bundle size**:
+   - Analizar bundle con `@next/bundle-analyzer`
+   - Implementar code splitting
+   - Lazy loading de componentes
+
+## 🔄 CI/CD Pipeline
+
+### GitHub Actions (Opcional)
+
+\`\`\`yaml
+# .github/workflows/deploy.yml
+name: Deploy to Vercel
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: amondnet/vercel-action@v20
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.ORG_ID }}
+          vercel-project-id: ${{ secrets.PROJECT_ID }}
+\`\`\`
+
+## 📊 Métricas y Monitoring
+
+### Vercel Analytics
+
+- Core Web Vitals
+- Page views
+- Performance metrics
+
+### Custom Monitoring
+
+\`\`\`javascript
+// lib/analytics.js
+export function trackEvent(event, properties) {
+  if (typeof window !== 'undefined') {
+    // Google Analytics, Mixpanel, etc.
+    gtag('event', event, properties)
+  }
+}
+\`\`\`
+
+---
+
+**¡Deployment exitoso! 🎉**
+
+Tu sistema de agendamiento médico está ahora en producción y listo para usar.

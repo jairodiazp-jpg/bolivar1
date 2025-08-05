@@ -1,79 +1,110 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { getDatabase } from "@/lib/mongodb"
+import { verifyToken } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   try {
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    const user = verifyToken(token)
+    if (!user) {
+      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
-    const userType = searchParams.get("userType")
     const companyId = searchParams.get("companyId")
 
-    // Mock statistics based on user type
-    let stats = {}
+    const db = await getDatabase()
 
-    if (userType === "admin") {
-      stats = {
-        totalEmpresas: 2,
-        totalProfesionales: 1000,
-        citasHoy: 247,
-        citasMes: 6140,
-        ingresosMes: 485000,
-        profesionalesActivos: 920,
-        citasPendientes: 45,
-        citasCompletadas: 5890,
-        citasCanceladas: 205,
-        satisfaccionPromedio: 4.8,
-        ocupacionPromedio: 87,
-        crecimientoMensual: 12,
-      }
-    } else if (userType === "empresa") {
-      const companyStats =
-        companyId === "1"
-          ? {
-              profesionales: 500,
-              citasHoy: 125,
-              citasMes: 3250,
-              ingresosMes: 245000,
-              profesionalesActivos: 460,
-            }
-          : {
-              profesionales: 500,
-              citasHoy: 122,
-              citasMes: 2890,
-              ingresosMes: 240000,
-              profesionalesActivos: 460,
-            }
+    // Build query based on user type
+    const query: any = {}
+    if (user.type === "empresa" && user.companyId) {
+      query.companyId = user.companyId
+    } else if (user.type === "profesional") {
+      query.doctorId = user.userId
+    } else if (companyId) {
+      query.companyId = Number.parseInt(companyId)
+    }
 
-      stats = {
-        ...companyStats,
-        citasPendientes: 23,
-        citasCompletadas: 3100,
-        citasCanceladas: 127,
-        satisfaccionPromedio: 4.7,
-        ocupacionPromedio: 85,
-        crecimientoMensual: 8,
-      }
-    } else if (userType === "profesional") {
-      stats = {
-        citasHoy: 8,
-        citasSemana: 35,
-        citasMes: 142,
-        horasTrabajadasMes: 168,
-        pacientesAtendidos: 134,
-        calificacionPromedio: 4.9,
-        citasPendientes: 12,
-        citasCompletadas: 130,
-        citasCanceladas: 8,
-        ingresosMes: 8500,
-        horasDisponibles: 40,
-        proximaCita: "2024-01-15T09:00:00Z",
+    const today = new Date().toISOString().split("T")[0]
+    const thisMonth = new Date().toISOString().slice(0, 7)
+
+    // Get appointments stats
+    const appointmentsCollection = db.collection("appointments")
+
+    const [appointmentsToday, appointmentsThisMonth, appointmentsByStatus, appointmentsBySpecialty] = await Promise.all(
+      [
+        appointmentsCollection.countDocuments({ ...query, date: today }),
+        appointmentsCollection.countDocuments({
+          ...query,
+          date: { $regex: `^${thisMonth}` },
+        }),
+        appointmentsCollection
+          .aggregate([{ $match: query }, { $group: { _id: "$status", count: { $sum: 1 } } }])
+          .toArray(),
+        appointmentsCollection
+          .aggregate([
+            { $match: query },
+            { $group: { _id: "$specialty", count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+            { $limit: 5 },
+          ])
+          .toArray(),
+      ],
+    )
+
+    // Get professionals stats if admin or empresa
+    let professionalsStats = null
+    if (user.type === "admin" || user.type === "empresa") {
+      const professionalsCollection = db.collection("professionals")
+      const profQuery = user.type === "empresa" && user.companyId ? { companyId: user.companyId } : {}
+
+      const [totalProfessionals, activeProfessionals, professionalsBySpecialty] = await Promise.all([
+        professionalsCollection.countDocuments(profQuery),
+        professionalsCollection.countDocuments({ ...profQuery, status: "active" }),
+        professionalsCollection
+          .aggregate([
+            { $match: profQuery },
+            { $group: { _id: "$specialty", count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+            { $limit: 5 },
+          ])
+          .toArray(),
+      ])
+
+      professionalsStats = {
+        total: totalProfessionals,
+        active: activeProfessionals,
+        bySpecialty: professionalsBySpecialty,
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      data: stats,
-    })
+    // Calculate revenue (mock calculation)
+    const revenue = appointmentsThisMonth * 50000 // $50k per appointment average
+
+    const stats = {
+      appointments: {
+        today: appointmentsToday,
+        thisMonth: appointmentsThisMonth,
+        byStatus: appointmentsByStatus.reduce((acc, item) => {
+          acc[item._id] = item.count
+          return acc
+        }, {}),
+        bySpecialty: appointmentsBySpecialty,
+      },
+      professionals: professionalsStats,
+      revenue: {
+        thisMonth: revenue,
+        average: Math.round(revenue / new Date().getDate()),
+      },
+    }
+
+    return NextResponse.json(stats)
   } catch (error) {
     console.error("Error fetching dashboard stats:", error)
-    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
