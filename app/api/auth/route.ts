@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import jwt from "jsonwebtoken"
 
-const JWT_SECRET = "your-secret-key-here"
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-here"
 
-// Simulación de base de datos de usuarios
+// Mock database of users
 const users = [
   {
     id: 1,
@@ -46,14 +46,14 @@ export async function POST(request: NextRequest) {
   try {
     const { email, password, userType } = await request.json()
 
-    // Validar credenciales
+    // Validate credentials
     const user = users.find((u) => u.email === email && u.password === password && u.type === userType)
 
     if (!user) {
       return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 })
     }
 
-    // Generar JWT token
+    // Generate JWT token
     const token = jwt.sign(
       {
         userId: user.id,
@@ -75,15 +75,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
+    console.error("Auth error:", error)
     return NextResponse.json({ error: "Error en el servidor" }, { status: 500 })
-  }
-}
-
-// Middleware para verificar JWT
-export function verifyToken(token: string) {
-  try {
-    return jwt.verify(token, JWT_SECRET)
-  } catch (error) {
-    return null
   }
 }

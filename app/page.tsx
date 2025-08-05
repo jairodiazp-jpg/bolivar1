@@ -1,231 +1,183 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Eye, EyeOff, Stethoscope } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Eye, EyeOff, Loader2, Stethoscope } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 export default function LoginPage() {
-  const [userType, setUserType] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [userType, setUserType] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const { toast } = useToast()
 
-  const handleLogin = async () => {
-    if (email && password && userType) {
-      setIsLoading(true)
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
 
-      // Simular autenticación
-      setTimeout(() => {
-        localStorage.setItem("userType", userType)
-        localStorage.setItem("userEmail", email)
+    try {
+      const response = await fetch("/api/auth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password, userType }),
+      })
 
-        switch (userType) {
+      const data = await response.json()
+
+      if (response.ok) {
+        // Store token in localStorage
+        localStorage.setItem("auth-token", data.token)
+        localStorage.setItem("user", JSON.stringify(data.user))
+
+        toast({
+          title: "¡Bienvenido!",
+          description: `Hola ${data.user.name}`,
+        })
+
+        // Redirect based on user type
+        switch (data.user.type) {
           case "admin":
             router.push("/admin/dashboard")
             break
           case "empresa1":
           case "empresa2":
+          case "empresa3":
             router.push("/empresa/dashboard")
             break
           case "profesional":
             router.push("/profesional/dashboard")
             break
+          default:
+            router.push("/dashboard")
         }
-        setIsLoading(false)
-      }, 1500)
+      } else {
+        toast({
+          title: "Error de autenticación",
+          description: data.error || "Credenciales inválidas",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error de conexión. Intenta nuevamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
+  const userTypes = [
+    { value: "admin", label: "Administrador", color: "bg-red-500" },
+    { value: "empresa1", label: "Clínica San Rafael", color: "bg-blue-500" },
+    { value: "empresa2", label: "Centro Médico Norte", color: "bg-green-500" },
+    { value: "empresa3", label: "Hospital Central", color: "bg-purple-500" },
+    { value: "profesional", label: "Profesional de Salud", color: "bg-orange-500" },
+  ]
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-400 via-green-500 to-green-600 relative overflow-hidden">
-      {/* Decorative circles */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-10 -left-10 w-32 h-32 bg-white/10 rounded-full"></div>
-        <div className="absolute top-20 -right-16 w-40 h-40 bg-white/5 rounded-full"></div>
-        <div className="absolute top-1/3 -left-8 w-24 h-24 bg-white/10 rounded-full"></div>
-        <div className="absolute bottom-1/3 -right-12 w-36 h-36 bg-white/5 rounded-full"></div>
-        <div className="absolute -bottom-10 left-1/4 w-28 h-28 bg-white/10 rounded-full"></div>
-        <div className="absolute bottom-20 right-1/4 w-20 h-20 bg-white/15 rounded-full"></div>
-      </div>
-
-      <div className="relative z-10 flex flex-col min-h-screen">
-        {/* Header with logo */}
-        <div className="flex-shrink-0 pt-12 pb-8 px-6 text-center">
-          <div className="inline-flex items-center justify-center w-24 h-24 bg-white/20 backdrop-blur-sm rounded-3xl mb-4 shadow-lg">
-            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-inner">
-              <Stethoscope className="w-8 h-8 text-green-600" />
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <div className="flex justify-center mb-4">
+            <div className="p-3 bg-blue-600 rounded-full">
+              <Stethoscope className="h-8 w-8 text-white" />
             </div>
           </div>
-          <div className="text-white">
-            <h1 className="text-lg font-bold tracking-wide">MEDISCHEDULE</h1>
-            <p className="text-sm text-white/80 mt-1">Sistema de Agendamiento</p>
-          </div>
-        </div>
-
-        {/* Main content */}
-        <div className="flex-1 bg-white rounded-t-[2rem] px-6 pt-8 pb-6 shadow-2xl">
-          <div className="max-w-sm mx-auto">
-            {/* Welcome message */}
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">¡Bienvenido!</h2>
-              <p className="text-gray-600 text-sm">Accede a tu plataforma médica</p>
+          <CardTitle className="text-2xl font-bold text-gray-900">MediSchedule</CardTitle>
+          <CardDescription>Sistema de Gestión Médica</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="userType">Tipo de Usuario</Label>
+              <Select value={userType} onValueChange={setUserType} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona tu tipo de usuario" />
+                </SelectTrigger>
+                <SelectContent>
+                  {userTypes.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${type.color}`} />
+                        {type.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Login form */}
-            <div className="space-y-6">
-              {/* User type selection */}
-              <div className="space-y-2">
-                <Label htmlFor="userType" className="text-gray-700 font-medium">
-                  Tipo de Usuario
-                </Label>
-                <Select value={userType} onValueChange={setUserType}>
-                  <SelectTrigger className="h-12 border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors">
-                    <SelectValue placeholder="Selecciona tu perfil" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                        <span>Administrador del Sistema</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="empresa1">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                        <span>Hospital San Rafael</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="empresa2">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span>Clínica Norte</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="profesional">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-teal-500 rounded-full"></div>
-                        <span>Profesional de la Salud</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="tu@email.com"
+                required
+              />
+            </div>
 
-              {/* Email input */}
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-gray-700 font-medium">
-                  Correo Corporativo
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder={
-                      userType === "admin"
-                        ? "admin@medischedule.com"
-                        : userType === "empresa1"
-                          ? "usuario@sanrafael.com"
-                          : userType === "empresa2"
-                            ? "usuario@clinicanorte.com"
-                            : userType === "profesional"
-                              ? "doctor@sanrafael.com o doctor@clinicanorte.com"
-                              : "tu@email.com"
-                    }
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors pl-4 pr-4"
-                  />
-                </div>
-              </div>
-
-              {/* Password input */}
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-gray-700 font-medium">
-                  Contraseña
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Contraseña"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors pl-4 pr-12"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Forgot password */}
-              <div className="text-right">
-                <button className="text-sm text-gray-600 hover:text-green-600 transition-colors">
-                  ¿Olvidaste tu contraseña?
-                </button>
-              </div>
-
-              {/* Login button */}
-              <Button
-                onClick={handleLogin}
-                disabled={!email || !password || !userType || isLoading}
-                className="w-full h-12 bg-gradient-to-r from-yellow-400 to-green-500 hover:from-yellow-500 hover:to-green-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span>Iniciando sesión...</span>
-                  </div>
-                ) : (
-                  "Iniciar sesión"
-                )}
-              </Button>
-
-              {/* Sign up link */}
-              <div className="text-center pt-4">
-                <p className="text-sm text-gray-600">
-                  ¿No tienes una cuenta?{" "}
-                  <button className="text-green-600 font-semibold hover:text-green-700 transition-colors">
-                    Contacta a tu administrador
-                  </button>
-                </p>
+            <div className="space-y-2">
+              <Label htmlFor="password">Contraseña</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
               </div>
             </div>
 
-            {/* Demo credentials */}
-            <div className="mt-8 p-4 bg-gray-50 rounded-xl">
-              <p className="text-xs text-gray-600 font-medium mb-2">Credenciales de prueba:</p>
-              <div className="space-y-1 text-xs text-gray-500">
-                <p>
-                  <strong>Admin:</strong> admin@medischedule.com / admin123
-                </p>
-                <p>
-                  <strong>Hospital San Rafael:</strong> admin@sanrafael.com / empresa123
-                </p>
-                <p>
-                  <strong>Clínica Norte:</strong> admin@clinicanorte.com / empresa123
-                </p>
-                <p>
-                  <strong>Doctor:</strong> carlos.mendoza@sanrafael.com / doctor123
-                </p>
-              </div>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Iniciando sesión...
+                </>
+              ) : (
+                "Iniciar Sesión"
+              )}
+            </Button>
+          </form>
+
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Credenciales de Demo:</h3>
+            <div className="text-xs text-gray-600 space-y-1">
+              <div>Admin: admin@medischedule.com / admin123</div>
+              <div>Empresa: empresa1@medischedule.com / empresa123</div>
+              <div>Doctor: doctor@medischedule.com / doctor123</div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Additional decorative elements */}
-      <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-white/5 to-transparent pointer-events-none"></div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

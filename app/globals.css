@@ -58,58 +58,72 @@
   }
 }
 
-/* Performance optimizations */
-@layer utilities {
-  .will-change-transform {
-    will-change: transform;
-  }
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
 
-  .will-change-scroll {
-    will-change: scroll-position;
-  }
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
 
-  .gpu-accelerated {
-    transform: translateZ(0);
-  }
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
 
-  .smooth-scroll {
-    scroll-behavior: smooth;
-  }
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 /* Loading animations */
-@keyframes shimmer {
-  0% {
-    background-position: -200px 0;
-  }
-  100% {
-    background-position: calc(200px + 100%) 0;
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
-.shimmer {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200px 100%;
-  animation: shimmer 1.5s infinite;
+.animate-spin {
+  animation: spin 1s linear infinite;
 }
 
-/* Optimize font loading */
-@font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/inter-v12-latin-regular.woff2") format("woff2");
+/* Calendar styles */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background-color: #e5e7eb;
 }
 
-/* Reduce motion for accessibility */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+.calendar-cell {
+  background-color: white;
+  min-height: 120px;
+  padding: 8px;
+  position: relative;
+}
+
+.appointment-block {
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin: 1px 0;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.appointment-block:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
   }
 }
