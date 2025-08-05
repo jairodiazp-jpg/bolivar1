@@ -1,103 +1,130 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
-import { verifyToken } from "@/lib/auth"
+import { getCurrentUser } from "@/lib/auth"
 
 export const runtime = "nodejs"
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.cookies.get("auth-token")?.value
-    if (!token) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
-
-    const user = verifyToken(token)
+    const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
     const db = await getDatabase()
 
-    // Get current date info
-    const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()))
-    const today = new Date().toISOString().split("T")[0]
+    // Obtener estadísticas según el rol del usuario
+    let stats: any = {}
 
-    // Build base query based on user type
-    const baseQuery: any = {}
-    if (user.type === "profesional") {
-      baseQuery.doctorId = user.userId
-    } else if (user.type.startsWith("empresa") && user.companyId) {
-      baseQuery.companyId = user.companyId
-    }
-
-    // Get appointments stats
-    const appointmentsCollection = db.collection("appointments")
-
-    const [
-      totalAppointments,
-      todayAppointments,
-      weekAppointments,
-      monthAppointments,
-      confirmedAppointments,
-      pendingAppointments,
-      cancelledAppointments,
-    ] = await Promise.all([
-      appointmentsCollection.countDocuments(baseQuery),
-      appointmentsCollection.countDocuments({ ...baseQuery, date: today }),
-      appointmentsCollection.countDocuments({
-        ...baseQuery,
-        createdAt: { $gte: startOfWeek },
-      }),
-      appointmentsCollection.countDocuments({
-        ...baseQuery,
-        createdAt: { $gte: startOfMonth },
-      }),
-      appointmentsCollection.countDocuments({ ...baseQuery, status: "confirmed" }),
-      appointmentsCollection.countDocuments({ ...baseQuery, status: "pending" }),
-      appointmentsCollection.countDocuments({ ...baseQuery, status: "cancelled" }),
-    ])
-
-    // Get professionals stats (only for admin and empresa users)
-    let professionalsStats = null
-    if (user.type === "admin" || user.type.startsWith("empresa")) {
-      const professionalsCollection = db.collection("professionals")
-      const profQuery: any = {}
-      if (user.type.startsWith("empresa") && user.companyId) {
-        profQuery.companyId = user.companyId
-      }
-
-      const [totalProfessionals, activeProfessionals] = await Promise.all([
-        professionalsCollection.countDocuments(profQuery),
-        professionalsCollection.countDocuments({ ...profQuery, status: "active" }),
+    if (user.role === "admin") {
+      // Estadísticas globales para admin
+      const [
+        totalProfessionals,
+        totalAppointments,
+        totalCompanies,
+        todayAppointments,
+        pendingAppointments,
+        confirmedAppointments,
+      ] = await Promise.all([
+        db.collection("professionals").countDocuments(),
+        db.collection("appointments").countDocuments(),
+        db.collection("companies").countDocuments(),
+        db.collection("appointments").countDocuments({
+          date: new Date().toISOString().split("T")[0],
+        }),
+        db.collection("appointments").countDocuments({ status: "pending" }),
+        db.collection("appointments").countDocuments({ status: "confirmed" }),
       ])
 
-      professionalsStats = {
-        total: totalProfessionals,
-        active: activeProfessionals,
-        inactive: totalProfessionals - activeProfessionals,
+      stats = {
+        totalProfessionals,
+        totalAppointments,
+        totalCompanies,
+        todayAppointments,
+        pendingAppointments,
+        confirmedAppointments,
+        activeProfessionals: await db.collection("professionals").countDocuments({ status: "active" }),
+        inactiveProfessionals: await db.collection("professionals").countDocuments({ status: "inactive" }),
+      }
+    } else if (user.role === "empresa") {
+      // Estadísticas de la empresa
+      const companyFilter = { companyId: user.companyId }
+
+      const [companyProfessionals, companyAppointments, todayAppointments, pendingAppointments, confirmedAppointments] =
+        await Promise.all([
+          db.collection("professionals").countDocuments(companyFilter),
+          db.collection("appointments").countDocuments(companyFilter),
+          db.collection("appointments").countDocuments({
+            ...companyFilter,
+            date: new Date().toISOString().split("T")[0],
+          }),
+          db.collection("appointments").countDocuments({ ...companyFilter, status: "pending" }),
+          db.collection("appointments").countDocuments({ ...companyFilter, status: "confirmed" }),
+        ])
+
+      stats = {
+        totalProfessionals: companyProfessionals,
+        totalAppointments: companyAppointments,
+        todayAppointments,
+        pendingAppointments,
+        confirmedAppointments,
+        activeProfessionals: await db
+          .collection("professionals")
+          .countDocuments({ ...companyFilter, status: "active" }),
+        inactiveProfessionals: await db
+          .collection("professionals")
+          .countDocuments({ ...companyFilter, status: "inactive" }),
+      }
+    } else if (user.role === "profesional") {
+      // Estadísticas del profesional
+      const professionalFilter = { doctorId: Number.parseInt(user.id) }
+
+      const [totalAppointments, todayAppointments, pendingAppointments, confirmedAppointments] = await Promise.all([
+        db.collection("appointments").countDocuments(professionalFilter),
+        db.collection("appointments").countDocuments({
+          ...professionalFilter,
+          date: new Date().toISOString().split("T")[0],
+        }),
+        db.collection("appointments").countDocuments({ ...professionalFilter, status: "pending" }),
+        db.collection("appointments").countDocuments({ ...professionalFilter, status: "confirmed" }),
+      ])
+
+      stats = {
+        totalAppointments,
+        todayAppointments,
+        pendingAppointments,
+        confirmedAppointments,
+        completedAppointments: await db
+          .collection("appointments")
+          .countDocuments({ ...professionalFilter, status: "completed" }),
+        cancelledAppointments: await db
+          .collection("appointments")
+          .countDocuments({ ...professionalFilter, status: "cancelled" }),
       }
     }
 
-    // Get recent appointments
-    const recentAppointments = await appointmentsCollection.find(baseQuery).sort({ createdAt: -1 }).limit(5).toArray()
+    // Obtener datos para gráficos (últimos 7 días)
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date()
+      date.setDate(date.getDate() - i)
+      return date.toISOString().split("T")[0]
+    }).reverse()
 
-    const stats = {
-      appointments: {
-        total: totalAppointments,
-        today: todayAppointments,
-        thisWeek: weekAppointments,
-        thisMonth: monthAppointments,
-        confirmed: confirmedAppointments,
-        pending: pendingAppointments,
-        cancelled: cancelledAppointments,
+    const appointmentsByDay = await Promise.all(
+      last7Days.map(async (date) => {
+        const filter = user.role === "empresa" ? { companyId: user.companyId, date } : { date }
+        const count = await db.collection("appointments").countDocuments(filter)
+        return { date, count }
+      }),
+    )
+
+    return NextResponse.json({
+      stats,
+      charts: {
+        appointmentsByDay,
+        last7Days,
       },
-      professionals: professionalsStats,
-      recent: recentAppointments,
-    }
-
-    return NextResponse.json(stats)
+    })
   } catch (error) {
     console.error("Error fetching dashboard stats:", error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })

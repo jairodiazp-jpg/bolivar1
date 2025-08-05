@@ -4,6 +4,7 @@ const nextConfig = {
     serverActions: {
       allowedOrigins: ["localhost:3000", "*.vercel.app"],
     },
+    serverComponentsExternalPackages: ["mongodb"],
   },
   images: {
     domains: ["placeholder.svg"],
@@ -78,6 +79,10 @@ const nextConfig = {
   },
   eslint: {
     ignoreDuringBuilds: false,
+  },
+  env: {
+    MONGODB_URI: process.env.MONGODB_URI,
+    JWT_SECRET: process.env.JWT_SECRET,
   },
 }
 

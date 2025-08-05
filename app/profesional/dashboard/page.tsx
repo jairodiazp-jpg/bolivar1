@@ -2,348 +2,379 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, Clock, Users, Star, Activity, LogOut, CheckCircle, XCircle, AlertCircle } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, Activity, TrendingUp, Search, Plus } from "lucide-react"
 
-interface Appointment {
-  id: number
-  patientName: string
-  date: string
-  time: string
-  status: "confirmed" | "completed" | "cancelled" | "pending"
-  notes: string
+interface ProfessionalStats {
+  totalAppointments: number
+  todayAppointments: number
+  pendingAppointments: number
+  confirmedAppointments: number
+  completedAppointments: number
+  cancelledAppointments: number
 }
 
-export default function ProfesionalDashboard() {
-  const router = useRouter()
-  const [professionalName, setProfessionalName] = useState("Dr. Carlos Mendoza")
-  const [stats, setStats] = useState({
-    citasHoy: 8,
-    citasSemana: 35,
-    citasMes: 142,
-    horasTrabajadasMes: 168,
-    pacientesAtendidos: 134,
-    calificacionPromedio: 4.9,
-    citasPendientes: 12,
-    citasCompletadas: 130,
-    citasCanceladas: 8,
-    proximaCita: "09:00",
-  })
-
-  const [appointments, setAppointments] = useState<Appointment[]>([])
+export default function ProfessionalDashboard() {
+  const [stats, setStats] = useState<ProfessionalStats | null>(null)
+  const [appointments, setAppointments] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
-    const userType = localStorage.getItem("userType")
-    const userName = localStorage.getItem("userName")
+    fetchDashboardData()
+  }, [])
 
-    if (userType !== "profesional") {
-      router.push("/")
-      return
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true)
+
+      const [statsResponse, appointmentsResponse] = await Promise.all([
+        fetch("/api/dashboard/stats"),
+        fetch("/api/appointments?limit=20"),
+      ])
+
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json()
+        setStats(statsData.stats)
+      }
+
+      if (appointmentsResponse.ok) {
+        const appointmentsData = await appointmentsResponse.json()
+        setAppointments(appointmentsData.appointments || [])
+      }
+    } catch (err) {
+      setError("Error al cargar los datos del dashboard")
+      console.error("Dashboard error:", err)
+    } finally {
+      setLoading(false)
     }
-
-    if (userName) {
-      setProfessionalName(userName)
-    }
-
-    loadAppointments()
-  }, [router])
-
-  const loadAppointments = async () => {
-    // Simular datos de citas del profesional
-    const mockAppointments: Appointment[] = [
-      {
-        id: 1,
-        patientName: "Juan Pérez",
-        date: "2024-01-15",
-        time: "09:00",
-        status: "confirmed",
-        notes: "Consulta de control cardiológico",
-      },
-      {
-        id: 2,
-        patientName: "María García",
-        date: "2024-01-15",
-        time: "10:30",
-        status: "confirmed",
-        notes: "Primera consulta",
-      },
-      {
-        id: 3,
-        patientName: "Carlos López",
-        date: "2024-01-15",
-        time: "11:00",
-        status: "pending",
-        notes: "Seguimiento post-operatorio",
-      },
-      {
-        id: 4,
-        patientName: "Ana Martínez",
-        date: "2024-01-15",
-        time: "14:00",
-        status: "completed",
-        notes: "Consulta completada exitosamente",
-      },
-      {
-        id: 5,
-        patientName: "Luis Rodríguez",
-        date: "2024-01-15",
-        time: "15:30",
-        status: "cancelled",
-        notes: "Paciente canceló por motivos personales",
-      },
-    ]
-    setAppointments(mockAppointments)
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem("userType")
-    localStorage.removeItem("userEmail")
-    localStorage.removeItem("userName")
-    router.push("/")
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "confirmed":
-        return "bg-blue-100 text-blue-800"
-      case "completed":
         return "bg-green-100 text-green-800"
-      case "cancelled":
-        return "bg-red-100 text-red-800"
       case "pending":
         return "bg-yellow-100 text-yellow-800"
+      case "cancelled":
+        return "bg-red-100 text-red-800"
+      case "completed":
+        return "bg-blue-100 text-blue-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
   }
 
-  const getStatusIcon = (status: string) => {
+  const getStatusText = (status: string) => {
     switch (status) {
       case "confirmed":
-        return <CheckCircle className="w-4 h-4" />
-      case "completed":
-        return <CheckCircle className="w-4 h-4" />
-      case "cancelled":
-        return <XCircle className="w-4 h-4" />
+        return "Confirmada"
       case "pending":
-        return <AlertCircle className="w-4 h-4" />
+        return "Pendiente"
+      case "cancelled":
+        return "Cancelada"
+      case "completed":
+        return "Completada"
       default:
-        return <Clock className="w-4 h-4" />
+        return status
     }
   }
 
-  const todayAppointments = appointments.filter((apt) => apt.date === "2024-01-15")
+  const filteredAppointments = appointments.filter((appointment: any) =>
+    appointment.patientName.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center">
-                <Activity className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">{professionalName}</h1>
-                <p className="text-sm text-gray-600">Panel Profesional</p>
-              </div>
-            </div>
-            <Button onClick={handleLogout} variant="outline" className="flex items-center space-x-2 bg-transparent">
-              <LogOut className="w-4 h-4" />
-              <span>Cerrar Sesión</span>
-            </Button>
-          </div>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard Profesional</h1>
+          <p className="text-gray-600">Panel de control para profesionales de la salud</p>
         </div>
-      </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-blue-100 text-sm font-medium">Citas Hoy</p>
-                  <p className="text-3xl font-bold">{stats.citasHoy}</p>
-                </div>
-                <Calendar className="w-8 h-8 text-blue-200" />
-              </div>
-            </CardContent>
-          </Card>
+        {stats && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Citas Totales</CardTitle>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalAppointments}</div>
+                <p className="text-xs text-muted-foreground">{stats.todayAppointments} hoy</p>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-green-100 text-sm font-medium">Esta Semana</p>
-                  <p className="text-3xl font-bold">{stats.citasSemana}</p>
-                </div>
-                <Clock className="w-8 h-8 text-green-200" />
-              </div>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.pendingAppointments}</div>
+                <p className="text-xs text-muted-foreground">Por confirmar</p>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-purple-100 text-sm font-medium">Este Mes</p>
-                  <p className="text-3xl font-bold">{stats.citasMes}</p>
-                </div>
-                <Users className="w-8 h-8 text-purple-200" />
-              </div>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Confirmadas</CardTitle>
+                <CheckCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.confirmedAppointments}</div>
+                <p className="text-xs text-muted-foreground">Listas para atender</p>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-yellow-100 text-sm font-medium">Calificación</p>
-                  <p className="text-3xl font-bold">{stats.calificacionPromedio}</p>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Completadas</CardTitle>
+                <Activity className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.completedAppointments}</div>
+                <p className="text-xs text-muted-foreground">Este mes</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Canceladas</CardTitle>
+                <XCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.cancelledAppointments}</div>
+                <p className="text-xs text-muted-foreground">Este mes</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Eficiencia</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {stats.totalAppointments > 0
+                    ? Math.round((stats.completedAppointments / stats.totalAppointments) * 100)
+                    : 0}
+                  %
                 </div>
-                <Star className="w-8 h-8 text-yellow-200" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                <p className="text-xs text-muted-foreground">Tasa de completitud</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Main Content */}
-        <Tabs defaultValue="hoy" className="space-y-6">
+        <Tabs defaultValue="today" className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="hoy">Citas de Hoy</TabsTrigger>
-            <TabsTrigger value="calendario">Calendario</TabsTrigger>
-            <TabsTrigger value="estadisticas">Estadísticas</TabsTrigger>
+            <TabsTrigger value="today">Citas de Hoy</TabsTrigger>
+            <TabsTrigger value="upcoming">Próximas Citas</TabsTrigger>
+            <TabsTrigger value="history">Historial</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="hoy" className="space-y-6">
+          <TabsContent value="today" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Calendar className="w-5 h-5" />
-                  <span>Citas de Hoy - {new Date().toLocaleDateString("es-ES")}</span>
-                </CardTitle>
-                <CardDescription>
-                  Tienes {todayAppointments.length} citas programadas para hoy. Próxima cita: {stats.proximaCita}
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Citas de Hoy</CardTitle>
+                    <CardDescription>
+                      {new Date().toLocaleDateString("es-ES", {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar paciente..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-8 w-64"
+                      />
+                    </div>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {todayAppointments.map((appointment) => (
-                    <div
-                      key={appointment.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg">
-                          {getStatusIcon(appointment.status)}
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-gray-900">{appointment.patientName}</h3>
-                          <p className="text-sm text-gray-600">{appointment.time}</p>
-                          <p className="text-xs text-gray-500 mt-1">{appointment.notes}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <Badge className={getStatusColor(appointment.status)}>
-                          {appointment.status === "confirmed" && "Confirmada"}
-                          {appointment.status === "completed" && "Completada"}
-                          {appointment.status === "cancelled" && "Cancelada"}
-                          {appointment.status === "pending" && "Pendiente"}
-                        </Badge>
-                        <Button variant="outline" size="sm">
-                          Ver Detalles
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Hora</TableHead>
+                      <TableHead>Paciente</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Notas</TableHead>
+                      <TableHead>Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAppointments
+                      .filter((appointment: any) => {
+                        const today = new Date().toISOString().split("T")[0]
+                        return appointment.date === today
+                      })
+                      .map((appointment: any) => (
+                        <TableRow key={appointment._id}>
+                          <TableCell className="font-medium">{appointment.time}</TableCell>
+                          <TableCell>{appointment.patientName}</TableCell>
+                          <TableCell>{appointment.type}</TableCell>
+                          <TableCell>
+                            <Badge className={getStatusColor(appointment.status)}>
+                              {getStatusText(appointment.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">{appointment.notes}</TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Button variant="outline" size="sm">
+                                Ver
+                              </Button>
+                              {appointment.status === "pending" && <Button size="sm">Confirmar</Button>}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+                {filteredAppointments.filter((appointment: any) => {
+                  const today = new Date().toISOString().split("T")[0]
+                  return appointment.date === today
+                }).length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">No tienes citas programadas para hoy</div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="calendario" className="space-y-6">
+          <TabsContent value="upcoming" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Calendar className="w-5 h-5" />
-                  <span>Calendario de Citas</span>
-                </CardTitle>
-                <CardDescription>Vista general de tus citas programadas</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Próximas Citas</CardTitle>
+                    <CardDescription>Citas programadas para los próximos días</CardDescription>
+                  </div>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nueva Cita
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8 text-gray-500">
-                  <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>El calendario interactivo estará disponible próximamente</p>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Hora</TableHead>
+                      <TableHead>Paciente</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAppointments
+                      .filter((appointment: any) => {
+                        const today = new Date().toISOString().split("T")[0]
+                        return appointment.date > today
+                      })
+                      .slice(0, 10)
+                      .map((appointment: any) => (
+                        <TableRow key={appointment._id}>
+                          <TableCell>{new Date(appointment.date).toLocaleDateString("es-ES")}</TableCell>
+                          <TableCell className="font-medium">{appointment.time}</TableCell>
+                          <TableCell>{appointment.patientName}</TableCell>
+                          <TableCell>{appointment.type}</TableCell>
+                          <TableCell>
+                            <Badge className={getStatusColor(appointment.status)}>
+                              {getStatusText(appointment.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="outline" size="sm">
+                              Ver Detalles
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="estadisticas" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Resumen del Mes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                      <span className="text-sm font-medium">Citas Completadas</span>
-                      <span className="text-lg font-bold text-green-600">{stats.citasCompletadas}</span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
-                      <span className="text-sm font-medium">Citas Pendientes</span>
-                      <span className="text-lg font-bold text-yellow-600">{stats.citasPendientes}</span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                      <span className="text-sm font-medium">Citas Canceladas</span>
-                      <span className="text-lg font-bold text-red-600">{stats.citasCanceladas}</span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                      <span className="text-sm font-medium">Horas Trabajadas</span>
-                      <span className="text-lg font-bold text-blue-600">{stats.horasTrabajadasMes}h</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Rendimiento</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="text-center">
-                      <div className="text-4xl font-bold text-green-600 mb-2">{stats.calificacionPromedio}</div>
-                      <div className="text-sm text-gray-600">Calificación Promedio</div>
-                      <div className="flex justify-center mt-2">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-5 h-5 ${
-                              i < Math.floor(stats.calificacionPromedio)
-                                ? "text-yellow-400 fill-current"
-                                : "text-gray-300"
-                            }`}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    <div className="border-t pt-4">
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-blue-600 mb-1">{stats.pacientesAtendidos}</div>
-                        <div className="text-sm text-gray-600">Pacientes Atendidos</div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+          <TabsContent value="history" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Historial de Citas</CardTitle>
+                <CardDescription>Registro de citas anteriores</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Paciente</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Duración</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAppointments
+                      .filter((appointment: any) => {
+                        const today = new Date().toISOString().split("T")[0]
+                        return appointment.date < today
+                      })
+                      .slice(0, 15)
+                      .map((appointment: any) => (
+                        <TableRow key={appointment._id}>
+                          <TableCell>{new Date(appointment.date).toLocaleDateString("es-ES")}</TableCell>
+                          <TableCell>{appointment.patientName}</TableCell>
+                          <TableCell>{appointment.type}</TableCell>
+                          <TableCell>
+                            <Badge className={getStatusColor(appointment.status)}>
+                              {getStatusText(appointment.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{appointment.duration || 30} min</TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

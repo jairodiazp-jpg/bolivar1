@@ -2,265 +2,256 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Users,
-  Calendar,
-  TrendingUp,
-  Activity,
-  UserCheck,
-  DollarSign,
-  BarChart3,
-  LogOut,
-  Search,
-  Plus,
-} from "lucide-react"
-import { useRouter } from "next/navigation"
-import ReportsDashboard from "@/components/reports-dashboard"
-import BulkUploadProfessionals from "@/components/bulk-upload-professionals"
+import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Users, Calendar, Clock, CheckCircle, AlertCircle, Download, Search, Plus, FileText } from "lucide-react"
 
-interface Professional {
-  id: number
-  name: string
-  specialty: string
-  email: string
-  phone: string
-  status: string
-  weeklyHours: number
-  rating: string
-  totalHoursThisMonth: number
+interface CompanyStats {
+  totalProfessionals: number
+  totalAppointments: number
+  todayAppointments: number
+  pendingAppointments: number
+  confirmedAppointments: number
+  activeProfessionals: number
+  inactiveProfessionals: number
 }
 
-export default function EmpresaDashboard() {
-  const router = useRouter()
-  const [companyName, setCompanyName] = useState("Hospital San Rafael")
-  const [companyId, setCompanyId] = useState(1)
-  const [stats, setStats] = useState({
-    profesionales: 500,
-    citasHoy: 125,
-    citasMes: 3250,
-    ingresosMes: 245000,
-    profesionalesActivos: 460,
-    citasPendientes: 23,
-  })
-
-  const [professionals, setProfessionals] = useState<Professional[]>([])
+export default function CompanyDashboard() {
+  const [stats, setStats] = useState<CompanyStats | null>(null)
+  const [appointments, setAppointments] = useState([])
+  const [professionals, setProfessionals] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
-  const [currentPage, setCurrentPage] = useState(1)
-  const professionalsPerPage = 20
 
   useEffect(() => {
-    const userType = localStorage.getItem("userType")
-    const storedCompanyId = localStorage.getItem("companyId")
+    fetchDashboardData()
+  }, [])
 
-    if (userType !== "empresa") {
-      router.push("/")
-      return
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true)
+
+      const [statsResponse, appointmentsResponse, professionalsResponse] = await Promise.all([
+        fetch("/api/dashboard/stats"),
+        fetch("/api/appointments?limit=10"),
+        fetch("/api/professionals?limit=10"),
+      ])
+
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json()
+        setStats(statsData.stats)
+      }
+
+      if (appointmentsResponse.ok) {
+        const appointmentsData = await appointmentsResponse.json()
+        setAppointments(appointmentsData.appointments || [])
+      }
+
+      if (professionalsResponse.ok) {
+        const professionalsData = await professionalsResponse.json()
+        setProfessionals(professionalsData.professionals || [])
+      }
+    } catch (err) {
+      setError("Error al cargar los datos del dashboard")
+      console.error("Dashboard error:", err)
+    } finally {
+      setLoading(false)
     }
-
-    if (storedCompanyId) {
-      setCompanyId(Number.parseInt(storedCompanyId))
-      setCompanyName(storedCompanyId === "1" ? "Hospital San Rafael" : "Clínica Norte")
-    }
-
-    loadProfessionals()
-  }, [router])
-
-  const loadProfessionals = async () => {
-    // Simular datos de profesionales de la empresa
-    const mockProfessionals: Professional[] = Array.from({ length: 500 }, (_, i) => ({
-      id: i + 1,
-      name: `Dr. Profesional ${i + 1}`,
-      specialty: ["Cardiología", "Pediatría", "Neurología", "Ginecología", "Dermatología"][i % 5],
-      email: `doctor${i + 1}@${companyId === 1 ? "sanrafael" : "clinicanorte"}.com`,
-      phone: `+57 300 ${String(Math.floor(Math.random() * 900) + 100)} ${String(Math.floor(Math.random() * 9000) + 1000)}`,
-      status: Math.random() > 0.1 ? "active" : "inactive",
-      weeklyHours: Math.floor(Math.random() * 20) + 30,
-      rating: (Math.random() * 1.5 + 3.5).toFixed(1),
-      totalHoursThisMonth: Math.floor(Math.random() * 80) + 120,
-    }))
-    setProfessionals(mockProfessionals)
   }
-
-  const handleLogout = () => {
-    localStorage.removeItem("userType")
-    localStorage.removeItem("userEmail")
-    localStorage.removeItem("companyId")
-    router.push("/")
-  }
-
-  const handleBulkUploadComplete = (results: any[]) => {
-    const successCount = results.filter((r) => r.success).length
-    setStats((prev) => ({
-      ...prev,
-      profesionales: prev.profesionales + successCount,
-      profesionalesActivos: prev.profesionalesActivos + successCount,
-    }))
-    loadProfessionals()
-  }
-
-  const filteredProfessionals = professionals.filter(
-    (prof) =>
-      prof.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      prof.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      prof.specialty.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
-
-  const paginatedProfessionals = filteredProfessionals.slice(
-    (currentPage - 1) * professionalsPerPage,
-    currentPage * professionalsPerPage,
-  )
-
-  const totalPages = Math.ceil(filteredProfessionals.length / professionalsPerPage)
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case "confirmed":
+        return "bg-green-100 text-green-800"
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      case "cancelled":
+        return "bg-red-100 text-red-800"
       case "active":
         return "bg-green-100 text-green-800"
       case "inactive":
-        return "bg-red-100 text-red-800"
+        return "bg-gray-100 text-gray-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Activity className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">{companyName}</h1>
-                <p className="text-sm text-gray-600">Panel de Administración</p>
-              </div>
-            </div>
-            <Button onClick={handleLogout} variant="outline" className="flex items-center space-x-2 bg-transparent">
-              <LogOut className="w-4 h-4" />
-              <span>Cerrar Sesión</span>
-            </Button>
-          </div>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard Empresarial</h1>
+          <p className="text-gray-600">Panel de control para gestión empresarial</p>
         </div>
-      </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
-          <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-blue-100 text-sm font-medium">Profesionales</p>
-                  <p className="text-3xl font-bold">{stats.profesionales}</p>
-                </div>
-                <Users className="w-8 h-8 text-blue-200" />
-              </div>
-            </CardContent>
-          </Card>
+        {stats && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Profesionales</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalProfessionals}</div>
+                <p className="text-xs text-muted-foreground">{stats.activeProfessionals} activos</p>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-yellow-100 text-sm font-medium">Citas Hoy</p>
-                  <p className="text-3xl font-bold">{stats.citasHoy}</p>
-                </div>
-                <Calendar className="w-8 h-8 text-yellow-200" />
-              </div>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Citas Totales</CardTitle>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalAppointments}</div>
+                <p className="text-xs text-muted-foreground">{stats.todayAppointments} hoy</p>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-purple-100 text-sm font-medium">Citas Mes</p>
-                  <p className="text-3xl font-bold">{stats.citasMes}</p>
-                </div>
-                <TrendingUp className="w-8 h-8 text-purple-200" />
-              </div>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Confirmadas</CardTitle>
+                <CheckCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.confirmedAppointments}</div>
+                <p className="text-xs text-muted-foreground">Citas confirmadas</p>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-emerald-100 text-sm font-medium">Ingresos</p>
-                  <p className="text-2xl font-bold">${stats.ingresosMes.toLocaleString()}</p>
-                </div>
-                <DollarSign className="w-8 h-8 text-emerald-200" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-orange-100 text-sm font-medium">Activos</p>
-                  <p className="text-3xl font-bold">{stats.profesionalesActivos}</p>
-                </div>
-                <UserCheck className="w-8 h-8 text-orange-200" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-r from-red-500 to-red-600 text-white">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-red-100 text-sm font-medium">Pendientes</p>
-                  <p className="text-3xl font-bold">{stats.citasPendientes}</p>
-                </div>
-                <BarChart3 className="w-8 h-8 text-red-200" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.pendingAppointments}</div>
+                <p className="text-xs text-muted-foreground">Por confirmar</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Main Content */}
-        <Tabs defaultValue="profesionales" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="profesionales">Profesionales</TabsTrigger>
-            <TabsTrigger value="citas">Citas</TabsTrigger>
-            <TabsTrigger value="reportes">Reportes</TabsTrigger>
+        <Tabs defaultValue="overview" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="overview">Resumen</TabsTrigger>
+            <TabsTrigger value="appointments">Citas</TabsTrigger>
+            <TabsTrigger value="professionals">Profesionales</TabsTrigger>
+            <TabsTrigger value="reports">Reportes</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="profesionales" className="space-y-6">
+          <TabsContent value="overview" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Actividad Reciente</CardTitle>
+                  <CardDescription>Últimas actividades en el sistema</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Nueva cita programada</p>
+                        <p className="text-xs text-muted-foreground">Hace 5 minutos</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Profesional registrado</p>
+                        <p className="text-xs text-muted-foreground">Hace 1 hora</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Cita reprogramada</p>
+                        <p className="text-xs text-muted-foreground">Hace 2 horas</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Métricas de Rendimiento</CardTitle>
+                  <CardDescription>Indicadores clave de la empresa</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Ocupación de Profesionales</span>
+                      <span>85%</span>
+                    </div>
+                    <Progress value={85} />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Satisfacción de Pacientes</span>
+                      <span>94%</span>
+                    </div>
+                    <Progress value={94} />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Puntualidad en Citas</span>
+                      <span>91%</span>
+                    </div>
+                    <Progress value={91} />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="appointments" className="space-y-6">
             <Card>
               <CardHeader>
-                <div className="flex justify-between items-center">
+                <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="flex items-center space-x-2">
-                      <Users className="w-5 h-5" />
-                      <span>Gestión de Profesionales ({filteredProfessionals.length})</span>
-                    </CardTitle>
-                    <CardDescription>Administra los profesionales de tu empresa</CardDescription>
+                    <CardTitle>Gestión de Citas</CardTitle>
+                    <CardDescription>Administra las citas de tu empresa</CardDescription>
                   </div>
-                  <div className="flex space-x-2">
-                    <BulkUploadProfessionals companyId={companyId} onUploadComplete={handleBulkUploadComplete} />
-                    <Button className="bg-blue-600 hover:bg-blue-700">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Nuevo Profesional
-                    </Button>
+                  <div className="flex items-center space-x-2">
                     <div className="relative">
-                      <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="Buscar profesionales..."
+                        placeholder="Buscar citas..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 w-64"
+                        className="pl-8 w-64"
                       />
                     </div>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Nueva Cita
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
@@ -268,87 +259,136 @@ export default function EmpresaDashboard() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Profesional</TableHead>
-                      <TableHead>Especialidad</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Horas/Mes</TableHead>
-                      <TableHead>Rating</TableHead>
+                      <TableHead>Paciente</TableHead>
+                      <TableHead>Doctor</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Hora</TableHead>
                       <TableHead>Estado</TableHead>
+                      <TableHead>Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedProfessionals.map((professional) => (
-                      <TableRow key={professional.id}>
-                        <TableCell className="font-medium">{professional.name}</TableCell>
-                        <TableCell>{professional.specialty}</TableCell>
-                        <TableCell className="text-sm text-gray-600">{professional.email}</TableCell>
-                        <TableCell>{professional.totalHoursThisMonth}h</TableCell>
+                    {appointments.map((appointment: any) => (
+                      <TableRow key={appointment._id}>
+                        <TableCell className="font-medium">{appointment.patientName}</TableCell>
+                        <TableCell>{appointment.doctorName}</TableCell>
+                        <TableCell>{new Date(appointment.date).toLocaleDateString("es-ES")}</TableCell>
+                        <TableCell>{appointment.time}</TableCell>
                         <TableCell>
-                          <span className="text-yellow-600">★ {professional.rating}</span>
+                          <Badge className={getStatusColor(appointment.status)}>{appointment.status}</Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge className={getStatusColor(professional.status)}>
-                            {professional.status === "active" ? "Activo" : "Inactivo"}
-                          </Badge>
+                          <Button variant="outline" size="sm">
+                            Ver
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-
-                {/* Pagination */}
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-gray-600">
-                    Mostrando {(currentPage - 1) * professionalsPerPage + 1} a{" "}
-                    {Math.min(currentPage * professionalsPerPage, filteredProfessionals.length)} de{" "}
-                    {filteredProfessionals.length} profesionales
-                  </p>
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      Anterior
-                    </Button>
-                    <span className="px-3 py-1 text-sm bg-gray-100 rounded">
-                      {currentPage} de {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                      disabled={currentPage === totalPages}
-                    >
-                      Siguiente
-                    </Button>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="citas" className="space-y-6">
+          <TabsContent value="professionals" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Calendar className="w-5 h-5" />
-                  <span>Gestión de Citas</span>
-                </CardTitle>
-                <CardDescription>Administra las citas médicas de tu empresa</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Profesionales de la Salud</CardTitle>
+                    <CardDescription>Gestiona tu equipo médico</CardDescription>
+                  </div>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Agregar Profesional
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8 text-gray-500">
-                  <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>El sistema de gestión de citas estará disponible próximamente</p>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Especialidad</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Citas/Semana</TableHead>
+                      <TableHead>Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {professionals.map((professional: any) => (
+                      <TableRow key={professional._id}>
+                        <TableCell className="font-medium">{professional.name}</TableCell>
+                        <TableCell>{professional.specialty}</TableCell>
+                        <TableCell>{professional.email}</TableCell>
+                        <TableCell>
+                          <Badge className={getStatusColor(professional.status)}>{professional.status}</Badge>
+                        </TableCell>
+                        <TableCell>{professional.weeklyAppointments || 0}</TableCell>
+                        <TableCell>
+                          <Button variant="outline" size="sm">
+                            Editar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="reportes" className="space-y-6">
-            <ReportsDashboard userType="empresa" companyId={companyId} />
+          <TabsContent value="reports" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Reportes Disponibles</CardTitle>
+                  <CardDescription>Genera reportes personalizados</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Button className="w-full justify-start bg-transparent" variant="outline">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Reporte de Citas Mensual
+                  </Button>
+                  <Button className="w-full justify-start bg-transparent" variant="outline">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Reporte de Profesionales
+                  </Button>
+                  <Button className="w-full justify-start bg-transparent" variant="outline">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Análisis de Productividad
+                  </Button>
+                  <Button className="w-full justify-start bg-transparent" variant="outline">
+                    <Download className="h-4 w-4 mr-2" />
+                    Exportar Datos (CSV)
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Estadísticas Avanzadas</CardTitle>
+                  <CardDescription>Análisis detallado del rendimiento</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Citas Completadas</span>
+                      <span className="text-2xl font-bold text-green-600">89%</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Tiempo Promedio por Cita</span>
+                      <span className="text-2xl font-bold">32 min</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Ingresos del Mes</span>
+                      <span className="text-2xl font-bold text-blue-600">$2.4M</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
