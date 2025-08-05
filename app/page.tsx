@@ -8,15 +8,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Eye, EyeOff, Loader2, Stethoscope } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Eye, EyeOff, Activity, Loader2, User, Building2, UserCheck } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [userType, setUserType] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [userType, setUserType] = useState<"admin" | "empresa" | "profesional">("admin")
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
@@ -31,19 +31,25 @@ export default function LoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password, userType }),
+        body: JSON.stringify({ email, password }),
       })
 
       const data = await response.json()
 
-      if (response.ok) {
-        // Store token in localStorage
-        localStorage.setItem("auth-token", data.token)
-        localStorage.setItem("user", JSON.stringify(data.user))
+      if (data.success) {
+        // Store user data in localStorage
+        localStorage.setItem("userType", data.user.type)
+        localStorage.setItem("userEmail", data.user.email)
+        localStorage.setItem("userName", data.user.name)
+        localStorage.setItem("userId", data.user.id.toString())
+
+        if (data.user.companyId) {
+          localStorage.setItem("companyId", data.user.companyId.toString())
+        }
 
         toast({
           title: "¡Bienvenido!",
-          description: `Hola ${data.user.name}`,
+          description: `Inicio de sesión exitoso como ${data.user.type}`,
         })
 
         // Redirect based on user type
@@ -51,16 +57,14 @@ export default function LoginPage() {
           case "admin":
             router.push("/admin/dashboard")
             break
-          case "empresa1":
-          case "empresa2":
-          case "empresa3":
+          case "empresa":
             router.push("/empresa/dashboard")
             break
           case "profesional":
             router.push("/profesional/dashboard")
             break
           default:
-            router.push("/dashboard")
+            router.push("/")
         }
       } else {
         toast({
@@ -70,9 +74,10 @@ export default function LoginPage() {
         })
       }
     } catch (error) {
+      console.error("Login error:", error)
       toast({
-        title: "Error",
-        description: "Error de conexión. Intenta nuevamente.",
+        title: "Error de conexión",
+        description: "No se pudo conectar con el servidor",
         variant: "destructive",
       })
     } finally {
@@ -80,104 +85,193 @@ export default function LoginPage() {
     }
   }
 
-  const userTypes = [
-    { value: "admin", label: "Administrador", color: "bg-red-500" },
-    { value: "empresa1", label: "Clínica San Rafael", color: "bg-blue-500" },
-    { value: "empresa2", label: "Centro Médico Norte", color: "bg-green-500" },
-    { value: "empresa3", label: "Hospital Central", color: "bg-purple-500" },
-    { value: "profesional", label: "Profesional de Salud", color: "bg-orange-500" },
-  ]
+  const getDemoCredentials = () => {
+    switch (userType) {
+      case "admin":
+        return { email: "admin@medischedule.com", password: "admin123" }
+      case "empresa":
+        return { email: "admin@sanrafael.com", password: "sanrafael123" }
+      case "profesional":
+        return { email: "doctor1@sanrafael.com", password: "doctor123" }
+      default:
+        return { email: "", password: "" }
+    }
+  }
+
+  const fillDemoCredentials = () => {
+    const credentials = getDemoCredentials()
+    setEmail(credentials.email)
+    setPassword(credentials.password)
+  }
+
+  const getUserTypeIcon = (type: string) => {
+    switch (type) {
+      case "admin":
+        return <UserCheck className="w-4 h-4" />
+      case "empresa":
+        return <Building2 className="w-4 h-4" />
+      case "profesional":
+        return <User className="w-4 h-4" />
+      default:
+        return <User className="w-4 h-4" />
+    }
+  }
+
+  const getUserTypeColor = (type: string) => {
+    switch (type) {
+      case "admin":
+        return "bg-red-100 text-red-800 border-red-200"
+      case "empresa":
+        return "bg-blue-100 text-blue-800 border-blue-200"
+      case "profesional":
+        return "bg-green-100 text-green-800 border-green-200"
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200"
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="p-3 bg-blue-600 rounded-full">
-              <Stethoscope className="h-8 w-8 text-white" />
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-600 rounded-2xl mb-4">
+            <Activity className="w-8 h-8 text-white" />
           </div>
-          <CardTitle className="text-2xl font-bold text-gray-900">MediSchedule</CardTitle>
-          <CardDescription>Sistema de Gestión Médica</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="userType">Tipo de Usuario</Label>
-              <Select value={userType} onValueChange={setUserType} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona tu tipo de usuario" />
-                </SelectTrigger>
-                <SelectContent>
-                  {userTypes.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${type.color}`} />
-                        {type.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">MediSchedule</h1>
+          <p className="text-gray-600">Sistema de Agendamiento Médico</p>
+        </div>
+
+        <Card className="shadow-xl border-0">
+          <CardHeader className="space-y-4">
+            <div className="text-center">
+              <CardTitle className="text-2xl font-bold">Iniciar Sesión</CardTitle>
+              <CardDescription>Accede a tu cuenta para continuar</CardDescription>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="tu@email.com"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
+            {/* User Type Selector */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Tipo de Usuario</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["admin", "empresa", "profesional"] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setUserType(type)}
+                    className={`p-3 rounded-lg border-2 transition-all duration-200 ${
+                      userType === type
+                        ? getUserTypeColor(type)
+                        : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                    }`}
+                  >
+                    <div className="flex flex-col items-center space-y-1">
+                      {getUserTypeIcon(type)}
+                      <span className="text-xs font-medium capitalize">{type}</span>
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
+          </CardHeader>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Iniciando sesión...
-                </>
-              ) : (
-                "Iniciar Sesión"
-              )}
-            </Button>
-          </form>
+          <CardContent className="space-y-6">
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="tu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="h-12"
+                />
+              </div>
 
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Credenciales de Demo:</h3>
-            <div className="text-xs text-gray-600 space-y-1">
-              <div>Admin: admin@medischedule.com / admin123</div>
-              <div>Empresa: empresa1@medischedule.com / empresa123</div>
-              <div>Doctor: doctor@medischedule.com / doctor123</div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Contraseña</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="h-12 pr-12"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-medium"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Iniciando sesión...
+                  </>
+                ) : (
+                  "Iniciar Sesión"
+                )}
+              </Button>
+            </form>
+
+            {/* Demo Credentials */}
+            <div className="space-y-3">
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-gray-200" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-gray-500">Credenciales de Demo</span>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Badge variant="secondary" className={getUserTypeColor(userType)}>
+                    {getUserTypeIcon(userType)}
+                    <span className="ml-1 capitalize">{userType}</span>
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={fillDemoCredentials}
+                    className="text-xs bg-transparent"
+                  >
+                    Usar Demo
+                  </Button>
+                </div>
+                <div className="text-xs text-gray-600 space-y-1">
+                  <div>
+                    <strong>Email:</strong> {getDemoCredentials().email}
+                  </div>
+                  <div>
+                    <strong>Contraseña:</strong> {getDemoCredentials().password}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        {/* Footer */}
+        <div className="text-center mt-8 text-sm text-gray-500">
+          <p>© 2024 MediSchedule. Sistema de gestión médica.</p>
+        </div>
+      </div>
     </div>
   )
 }

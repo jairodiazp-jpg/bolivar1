@@ -1,81 +1,100 @@
 import { type NextRequest, NextResponse } from "next/server"
-import jwt from "jsonwebtoken"
+import { generateToken } from "@/lib/auth"
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-here"
-
-// Mock database of users
-const users = [
+// Mock user data - in production, this would come from a database
+const mockUsers = [
+  // Admin user
   {
     id: 1,
     email: "admin@medischedule.com",
     password: "admin123",
-    type: "admin",
     name: "Administrador Sistema",
+    type: "admin",
   },
+  // Company users
   {
     id: 2,
-    email: "empresa1@medischedule.com",
-    password: "empresa123",
-    type: "empresa1",
-    name: "Clínica San Rafael",
+    email: "admin@sanrafael.com",
+    password: "sanrafael123",
+    name: "Admin Hospital San Rafael",
+    type: "empresa",
+    companyId: 1,
   },
   {
     id: 3,
-    email: "empresa2@medischedule.com",
-    password: "empresa123",
-    type: "empresa2",
-    name: "Centro Médico Norte",
-  },
-  {
-    id: 4,
-    email: "empresa3@medischedule.com",
-    password: "empresa123",
-    type: "empresa3",
-    name: "Hospital Central",
-  },
-  {
-    id: 5,
-    email: "doctor@medischedule.com",
-    password: "doctor123",
-    type: "profesional",
-    name: "Dr. Carlos Mendoza",
+    email: "admin@clinicanorte.com",
+    password: "clinicanorte123",
+    name: "Admin Clínica Norte",
+    type: "empresa",
+    companyId: 2,
   },
 ]
 
+// Generate professional users
+for (let i = 1; i <= 1000; i++) {
+  const companyId = i <= 500 ? 1 : 2
+  const companyDomain = companyId === 1 ? "sanrafael" : "clinicanorte"
+
+  mockUsers.push({
+    id: i + 10,
+    email: `doctor${i}@${companyDomain}.com`,
+    password: "doctor123",
+    name: `Dr. Profesional ${i}`,
+    type: "profesional",
+    companyId,
+  })
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, userType } = await request.json()
+    const { email, password } = await request.json()
 
-    // Validate credentials
-    const user = users.find((u) => u.email === email && u.password === password && u.type === userType)
+    if (!email || !password) {
+      return NextResponse.json({ error: "Email y contraseña son requeridos" }, { status: 400 })
+    }
+
+    // Find user
+    const user = mockUsers.find((u) => u.email === email && u.password === password)
 
     if (!user) {
       return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 })
     }
 
     // Generate JWT token
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-        type: user.type,
-        name: user.name,
-      },
-      JWT_SECRET,
-      { expiresIn: "24h" },
-    )
+    const token = generateToken({
+      userId: user.id,
+      email: user.email,
+      type: user.type,
+      name: user.name,
+    })
 
-    return NextResponse.json({
-      token,
+    const response = NextResponse.json({
+      success: true,
       user: {
         id: user.id,
         email: user.email,
-        type: user.type,
         name: user.name,
+        type: user.type,
+        companyId: user.companyId,
       },
+      token,
     })
+
+    // Set HTTP-only cookie
+    response.cookies.set("auth-token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24, // 24 hours
+    })
+
+    return response
   } catch (error) {
-    console.error("Auth error:", error)
-    return NextResponse.json({ error: "Error en el servidor" }, { status: 500 })
+    console.error("Login error:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
+}
+
+export async function GET() {
+  return NextResponse.json({ message: "Auth endpoint working" })
 }
