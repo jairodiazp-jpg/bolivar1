@@ -8,9 +8,10 @@ import { Toaster } from "@/components/ui/toaster"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "MediSchedule - Sistema de Agendamiento Médico",
-  description: "Sistema completo de agendamiento médico para hospitales y clínicas",
-  keywords: ["medicina", "agendamiento", "citas médicas", "hospital", "clínica"],
+  title: "MediSchedule - Sistema de Gestión de Citas Médicas",
+  description:
+    "Sistema integral para la gestión de citas médicas, profesionales de la salud y reportes administrativos",
+  keywords: "citas médicas, gestión hospitalaria, profesionales salud, seguros bolivar",
   authors: [{ name: "MediSchedule Team" }],
   viewport: "width=device-width, initial-scale=1",
     generator: 'v0.dev'

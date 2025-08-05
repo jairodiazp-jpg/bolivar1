@@ -5,7 +5,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatDate(date: string | Date) {
+export function formatDate(date: string | Date): string {
   const d = new Date(date)
   return d.toLocaleDateString("es-ES", {
     year: "numeric",
@@ -14,41 +14,22 @@ export function formatDate(date: string | Date) {
   })
 }
 
-export function formatTime(time: string) {
-  return time
+export function formatTime(time: string): string {
+  return time.slice(0, 5) // HH:MM
 }
 
-export function formatDateTime(date: string | Date, time?: string) {
-  const formattedDate = formatDate(date)
-  return time ? `${formattedDate} a las ${time}` : formattedDate
+export function formatDateTime(date: string | Date): string {
+  const d = new Date(date)
+  return d.toLocaleString("es-ES", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
 }
 
-export function generateTimeSlots(start: string, end: string, duration = 30) {
-  const slots = []
-  const startTime = new Date(`2000-01-01T${start}:00`)
-  const endTime = new Date(`2000-01-01T${end}:00`)
-
-  const current = new Date(startTime)
-
-  while (current < endTime) {
-    slots.push(current.toTimeString().slice(0, 5))
-    current.setMinutes(current.getMinutes() + duration)
-  }
-
-  return slots
-}
-
-export function validateEmail(email: string) {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return emailRegex.test(email)
-}
-
-export function validatePhone(phone: string) {
-  const phoneRegex = /^\+?[\d\s-()]+$/
-  return phoneRegex.test(phone)
-}
-
-export function getStatusColor(status: string) {
+export function getStatusColor(status: string): string {
   switch (status) {
     case "confirmed":
       return "bg-green-100 text-green-800"
@@ -56,14 +37,16 @@ export function getStatusColor(status: string) {
       return "bg-yellow-100 text-yellow-800"
     case "cancelled":
       return "bg-red-100 text-red-800"
-    case "completed":
-      return "bg-blue-100 text-blue-800"
+    case "active":
+      return "bg-green-100 text-green-800"
+    case "inactive":
+      return "bg-gray-100 text-gray-800"
     default:
       return "bg-gray-100 text-gray-800"
   }
 }
 
-export function getStatusText(status: string) {
+export function getStatusText(status: string): string {
   switch (status) {
     case "confirmed":
       return "Confirmada"
@@ -71,9 +54,90 @@ export function getStatusText(status: string) {
       return "Pendiente"
     case "cancelled":
       return "Cancelada"
-    case "completed":
-      return "Completada"
+    case "active":
+      return "Activo"
+    case "inactive":
+      return "Inactivo"
     default:
-      return "Desconocido"
+      return status
   }
+}
+
+export function generateId(): string {
+  return Math.random().toString(36).substr(2, 9)
+}
+
+export function validateEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
+export function validatePhone(phone: string): boolean {
+  const phoneRegex = /^\+?[\d\s-()]+$/
+  return phoneRegex.test(phone) && phone.length >= 10
+}
+
+export function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text
+  return text.slice(0, maxLength) + "..."
+}
+
+export function capitalizeFirst(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase()
+}
+
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+  }).format(amount)
+}
+
+export function calculateAge(birthDate: string | Date): number {
+  const today = new Date()
+  const birth = new Date(birthDate)
+  let age = today.getFullYear() - birth.getFullYear()
+  const monthDiff = today.getMonth() - birth.getMonth()
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--
+  }
+
+  return age
+}
+
+export function isValidDate(dateString: string): boolean {
+  const date = new Date(dateString)
+  return date instanceof Date && !isNaN(date.getTime())
+}
+
+export function addDays(date: Date, days: number): Date {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
+}
+
+export function isSameDay(date1: Date, date2: Date): boolean {
+  return date1.toDateString() === date2.toDateString()
+}
+
+export function getWeekDays(): string[] {
+  return ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+}
+
+export function getMonths(): string[] {
+  return [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+  ]
 }
