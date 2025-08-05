@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
 import { verifyToken } from "@/lib/auth"
-import { sendEmail, generateCredentialsEmailHTML } from "@/lib/email"
+
+export const runtime = "nodejs"
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,108 +12,89 @@ export async function POST(request: NextRequest) {
     }
 
     const user = verifyToken(token)
-    if (!user || (user.type !== "admin" && user.type !== "empresa")) {
+    if (!user || (user.type !== "admin" && !user.type.startsWith("empresa"))) {
       return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
     }
 
     const body = await request.json()
-    const { professionals, companyId } = body
+    const { professionals } = body
 
-    if (!professionals || !Array.isArray(professionals)) {
+    if (!Array.isArray(professionals) || professionals.length === 0) {
       return NextResponse.json({ error: "Se requiere un array de profesionales" }, { status: 400 })
     }
 
     const db = await getDatabase()
     const collection = db.collection("professionals")
-    const results = []
 
-    for (const prof of professionals) {
+    const results = {
+      success: 0,
+      errors: [] as any[],
+      total: professionals.length,
+    }
+
+    for (let i = 0; i < professionals.length; i++) {
+      const prof = professionals[i]
+
       try {
-        const { name, specialty, email, phone, weeklyHours } = prof
-
-        if (!name || !specialty || !email || !phone) {
-          results.push({
-            email,
-            success: false,
-            error: "Campos requeridos faltantes",
+        // Validate required fields
+        if (!prof.name || !prof.specialty || !prof.email) {
+          results.errors.push({
+            row: i + 1,
+            error: "Nombre, especialidad y email son requeridos",
+            data: prof,
           })
           continue
         }
 
-        // Check if email already exists
-        const existingProfessional = await collection.findOne({ email })
-        if (existingProfessional) {
-          results.push({
-            email,
-            success: false,
+        // Check if already exists
+        const existing = await collection.findOne({ email: prof.email })
+        if (existing) {
+          results.errors.push({
+            row: i + 1,
             error: "Email ya existe",
+            data: prof,
           })
           continue
         }
-
-        // Generate credentials
-        const username = email.split("@")[0]
-        const password = Math.random().toString(36).slice(-8)
 
         const professional = {
-          name,
-          specialty,
-          email,
-          phone,
-          companyId: user.type === "empresa" ? user.companyId : companyId,
-          weeklyHours: weeklyHours || 40,
-          status: "active",
-          rating: "5.0",
-          totalHoursThisMonth: 0,
-          credentials: {
-            username,
-            password,
+          name: prof.name,
+          specialty: prof.specialty,
+          email: prof.email,
+          phone: prof.phone || "",
+          schedule: prof.schedule || {
+            monday: { start: "09:00", end: "17:00", available: true },
+            tuesday: { start: "09:00", end: "17:00", available: true },
+            wednesday: { start: "09:00", end: "17:00", available: true },
+            thursday: { start: "09:00", end: "17:00", available: true },
+            friday: { start: "09:00", end: "17:00", available: true },
+            saturday: { start: "09:00", end: "13:00", available: false },
+            sunday: { start: "09:00", end: "13:00", available: false },
           },
+          companyId: user.type.startsWith("empresa")
+            ? user.companyId
+            : prof.companyId
+              ? Number.parseInt(prof.companyId)
+              : 1,
+          status: "active",
           createdAt: new Date(),
           updatedAt: new Date(),
         }
 
-        const result = await collection.insertOne(professional)
-
-        // Send credentials email (async, don't wait)
-        sendEmail({
-          to: email,
-          subject: "Credenciales de Acceso - MediSchedule",
-          html: generateCredentialsEmailHTML({
-            name,
-            specialty,
-            companyName: "Hospital",
-            credentials: { username, password },
-          }),
-        }).catch((error) => {
-          console.error(`Error sending email to ${email}:`, error)
-        })
-
-        results.push({
-          email,
-          success: true,
-          id: result.insertedId,
-        })
+        await collection.insertOne(professional)
+        results.success++
       } catch (error) {
-        results.push({
-          email: prof.email,
-          success: false,
+        results.errors.push({
+          row: i + 1,
           error: error instanceof Error ? error.message : "Error desconocido",
+          data: prof,
         })
       }
     }
 
-    const successCount = results.filter((r) => r.success).length
-    const errorCount = results.filter((r) => !r.success).length
-
     return NextResponse.json({
       success: true,
       results,
-      summary: {
-        total: professionals.length,
-        success: successCount,
-        errors: errorCount,
-      },
     })
   } catch (error) {
     console.error("Error in bulk upload:", error)

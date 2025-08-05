@@ -5,7 +5,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatDate(date: string | Date): string {
+export function formatDate(date: string | Date) {
   const d = new Date(date)
   return d.toLocaleDateString("es-ES", {
     year: "numeric",
@@ -14,50 +14,66 @@ export function formatDate(date: string | Date): string {
   })
 }
 
-export function formatTime(time: string): string {
-  return time.slice(0, 5) // Remove seconds if present
+export function formatTime(time: string) {
+  return time
 }
 
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("es-CO", {
-    style: "currency",
-    currency: "COP",
-  }).format(amount)
+export function formatDateTime(date: string | Date, time?: string) {
+  const formattedDate = formatDate(date)
+  return time ? `${formattedDate} a las ${time}` : formattedDate
 }
 
-export function generateId(): string {
-  return Math.random().toString(36).substr(2, 9)
+export function generateTimeSlots(start: string, end: string, duration = 30) {
+  const slots = []
+  const startTime = new Date(`2000-01-01T${start}:00`)
+  const endTime = new Date(`2000-01-01T${end}:00`)
+
+  const current = new Date(startTime)
+
+  while (current < endTime) {
+    slots.push(current.toTimeString().slice(0, 5))
+    current.setMinutes(current.getMinutes() + duration)
+  }
+
+  return slots
 }
 
-export function validateEmail(email: string): boolean {
+export function validateEmail(email: string) {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   return emailRegex.test(email)
 }
 
-export function validatePhone(phone: string): boolean {
-  const phoneRegex = /^\+?[\d\s\-$$$$]{10,}$/
+export function validatePhone(phone: string) {
+  const phoneRegex = /^\+?[\d\s-()]+$/
   return phoneRegex.test(phone)
 }
 
-export function sanitizeInput(input: string): string {
-  return input.trim().replace(/[<>]/g, "")
-}
-
-export function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeout)
-    timeout = setTimeout(() => func(...args), wait)
+export function getStatusColor(status: string) {
+  switch (status) {
+    case "confirmed":
+      return "bg-green-100 text-green-800"
+    case "pending":
+      return "bg-yellow-100 text-yellow-800"
+    case "cancelled":
+      return "bg-red-100 text-red-800"
+    case "completed":
+      return "bg-blue-100 text-blue-800"
+    default:
+      return "bg-gray-100 text-gray-800"
   }
 }
 
-export function throttle<T extends (...args: any[]) => any>(func: T, limit: number): (...args: Parameters<T>) => void {
-  let inThrottle: boolean
-  return (...args: Parameters<T>) => {
-    if (!inThrottle) {
-      func(...args)
-      inThrottle = true
-      setTimeout(() => (inThrottle = false), limit)
-    }
+export function getStatusText(status: string) {
+  switch (status) {
+    case "confirmed":
+      return "Confirmada"
+    case "pending":
+      return "Pendiente"
+    case "cancelled":
+      return "Cancelada"
+    case "completed":
+      return "Completada"
+    default:
+      return "Desconocido"
   }
 }

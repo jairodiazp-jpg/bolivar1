@@ -5,7 +5,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-jwt-key-change-i
 export interface TokenPayload {
   userId: number
   email: string
-  type: "admin" | "empresa" | "profesional"
+  type: "admin" | "empresa1" | "empresa2" | "empresa3" | "profesional"
   name: string
   companyId?: number
 }
@@ -24,11 +24,10 @@ export function verifyToken(token: string): TokenPayload | null {
 }
 
 export function hashPassword(password: string): string {
-  // In production, use bcrypt or similar
-  return Buffer.from(password).toString("base64")
+  // Simple hash for demo - use bcrypt in production
+  return Buffer.from(password + JWT_SECRET).toString("base64")
 }
 
 export function comparePassword(password: string, hash: string): boolean {
-  // In production, use bcrypt or similar
-  return Buffer.from(password).toString("base64") === hash
+  return Buffer.from(password + JWT_SECRET).toString("base64") === hash
 }

@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
 import { verifyToken } from "@/lib/auth"
-import { sendEmail, generateAppointmentEmailHTML } from "@/lib/email"
-import { sendWhatsAppMessage, formatAppointmentWhatsApp } from "@/lib/twilio"
+import { ObjectId } from "mongodb"
+
+export const runtime = "nodejs"
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     if (user.type === "profesional") {
       query.doctorId = user.userId
-    } else if (user.type === "empresa" && user.companyId) {
+    } else if (user.type.startsWith("empresa") && user.companyId) {
       query.companyId = user.companyId
     } else if (companyId) {
       query.companyId = Number.parseInt(companyId)
@@ -51,6 +52,8 @@ export async function GET(request: NextRequest) {
     }
 
     const skip = (page - 1) * limit
+
+    // Fix MongoDB query chain
     const appointments = await collection.find(query).sort({ date: -1, time: 1 }).skip(skip).limit(limit).toArray()
 
     const total = await collection.countDocuments(query)
@@ -111,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     // Check for conflicts
     const conflictingAppointment = await collection.findOne({
-      doctorId,
+      doctorId: Number.parseInt(doctorId),
       date,
       time,
       status: { $in: ["confirmed", "pending"] },
@@ -125,7 +128,7 @@ export async function POST(request: NextRequest) {
       patientName,
       patientEmail,
       patientPhone: patientPhone || "",
-      doctorId,
+      doctorId: Number.parseInt(doctorId),
       doctorName: doctorName || "Dr. Desconocido",
       specialty: specialty || "Medicina General",
       date,
@@ -135,35 +138,12 @@ export async function POST(request: NextRequest) {
       status: "confirmed",
       notes: notes || "",
       location: location || "Consultorio",
-      companyId: user.type === "empresa" ? user.companyId : companyId,
+      companyId: user.type.startsWith("empresa") ? user.companyId : companyId ? Number.parseInt(companyId) : 1,
       createdAt: new Date(),
       updatedAt: new Date(),
     }
 
     const result = await collection.insertOne(appointment)
-
-    // Send confirmation email
-    try {
-      await sendEmail({
-        to: patientEmail,
-        subject: "Confirmación de Cita Médica - MediSchedule",
-        html: generateAppointmentEmailHTML(appointment),
-      })
-    } catch (emailError) {
-      console.error("Error sending confirmation email:", emailError)
-    }
-
-    // Send WhatsApp notification if phone is provided
-    if (patientPhone) {
-      try {
-        await sendWhatsAppMessage({
-          to: patientPhone,
-          message: formatAppointmentWhatsApp(appointment),
-        })
-      } catch (whatsappError) {
-        console.error("Error sending WhatsApp:", whatsappError)
-      }
-    }
 
     return NextResponse.json({
       success: true,
@@ -206,38 +186,50 @@ export async function PUT(request: NextRequest) {
       updateFields.status = status
     }
 
-    const result = await collection.updateOne({ _id: id }, { $set: updateFields })
+    const result = await collection.updateOne({ _id: new ObjectId(id) }, { $set: updateFields })
 
     if (result.matchedCount === 0) {
       return NextResponse.json({ error: "Cita no encontrada" }, { status: 404 })
     }
 
-    // If status changed, send notification
-    if (status) {
-      const appointment = await collection.findOne({ _id: id })
-      if (appointment && appointment.patientEmail) {
-        try {
-          let subject = "Actualización de Cita Médica"
-          if (status === "cancelled") {
-            subject = "Cita Cancelada - MediSchedule"
-          } else if (status === "confirmed") {
-            subject = "Cita Confirmada - MediSchedule"
-          }
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Error updating appointment:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+  }
+}
 
-          await sendEmail({
-            to: appointment.patientEmail,
-            subject,
-            html: generateAppointmentEmailHTML({ ...appointment, status }),
-          })
-        } catch (emailError) {
-          console.error("Error sending status update email:", emailError)
-        }
-      }
+export async function DELETE(request: NextRequest) {
+  try {
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    const user = verifyToken(token)
+    if (!user) {
+      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get("id")
+
+    if (!id) {
+      return NextResponse.json({ error: "ID requerido" }, { status: 400 })
+    }
+
+    const db = await getDatabase()
+    const collection = db.collection("appointments")
+
+    const result = await collection.deleteOne({ _id: new ObjectId(id) })
+
+    if (result.deletedCount === 0) {
+      return NextResponse.json({ error: "Cita no encontrada" }, { status: 404 })
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Error updating appointment:", error)
+    console.error("Error deleting appointment:", error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

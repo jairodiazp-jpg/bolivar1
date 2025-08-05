@@ -1,49 +1,33 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { generateToken } from "@/lib/auth"
+import { generateToken, comparePassword } from "@/lib/auth"
 
-// Mock user data - in production, this would come from a database
+export const runtime = "nodejs"
+
+// Mock users for demo - replace with real database
 const mockUsers = [
-  // Admin user
   {
     id: 1,
     email: "admin@medischedule.com",
-    password: "admin123",
-    name: "Administrador Sistema",
-    type: "admin",
+    password: "YWRtaW4xMjN5b3VyLXN1cGVyLXNlY3JldC1qd3Qta2V5LWNoYW5nZS1pbi1wcm9kdWN0aW9u", // admin123
+    name: "Administrador",
+    type: "admin" as const,
   },
-  // Company users
   {
     id: 2,
-    email: "admin@sanrafael.com",
-    password: "sanrafael123",
-    name: "Admin Hospital San Rafael",
-    type: "empresa",
+    email: "empresa1@segurosbolivar.com",
+    password: "ZW1wcmVzYTEyM3lvdXItc3VwZXItc2VjcmV0LWp3dC1rZXktY2hhbmdlLWluLXByb2R1Y3Rpb24=", // empresa123
+    name: "Seguros Bolívar",
+    type: "empresa1" as const,
     companyId: 1,
   },
   {
     id: 3,
-    email: "admin@clinicanorte.com",
-    password: "clinicanorte123",
-    name: "Admin Clínica Norte",
-    type: "empresa",
-    companyId: 2,
+    email: "doctor@medischedule.com",
+    password: "ZG9jdG9yMTIzeW91ci1zdXBlci1zZWNyZXQtand0LWtleS1jaGFuZ2UtaW4tcHJvZHVjdGlvbg==", // doctor123
+    name: "Dr. Juan Pérez",
+    type: "profesional" as const,
   },
 ]
-
-// Generate professional users
-for (let i = 1; i <= 1000; i++) {
-  const companyId = i <= 500 ? 1 : 2
-  const companyDomain = companyId === 1 ? "sanrafael" : "clinicanorte"
-
-  mockUsers.push({
-    id: i + 10,
-    email: `doctor${i}@${companyDomain}.com`,
-    password: "doctor123",
-    name: `Dr. Profesional ${i}`,
-    type: "profesional",
-    companyId,
-  })
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,10 +37,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email y contraseña son requeridos" }, { status: 400 })
     }
 
-    // Find user
-    const user = mockUsers.find((u) => u.email === email && u.password === password)
+    // Find user (in production, query from database)
+    const user = mockUsers.find((u) => u.email === email)
 
-    if (!user) {
+    if (!user || !comparePassword(password, user.password)) {
       return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 })
     }
 
@@ -66,8 +50,10 @@ export async function POST(request: NextRequest) {
       email: user.email,
       type: user.type,
       name: user.name,
+      companyId: user.companyId,
     })
 
+    // Create response with token in cookie
     const response = NextResponse.json({
       success: true,
       user: {
@@ -75,9 +61,7 @@ export async function POST(request: NextRequest) {
         email: user.email,
         name: user.name,
         type: user.type,
-        companyId: user.companyId,
       },
-      token,
     })
 
     // Set HTTP-only cookie
@@ -85,16 +69,26 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24, // 24 hours
+      maxAge: 24 * 60 * 60, // 24 hours
     })
 
     return response
   } catch (error) {
-    console.error("Login error:", error)
+    console.error("Auth error:", error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
-export async function GET() {
-  return NextResponse.json({ message: "Auth endpoint working" })
+export async function DELETE() {
+  const response = NextResponse.json({ success: true })
+
+  // Clear auth cookie
+  response.cookies.set("auth-token", "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 0,
+  })
+
+  return response
 }

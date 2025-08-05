@@ -1,31 +1,32 @@
-import { MongoClient } from "mongodb"
+import { MongoClient, type Db } from "mongodb"
 
 if (!process.env.MONGODB_URI) {
   throw new Error("Please add your MongoDB URI to .env.local")
 }
 
-const uri = process.env.MONGODB_URI
+const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/medischedule"
 const options = {}
 
 let client: MongoClient
-let clientPromise: Promise<MongoClient>
+let db: Db
 
-if (process.env.NODE_ENV === "development") {
-  const globalWithMongo = global as typeof globalThis & {
-    _mongoClientPromise?: Promise<MongoClient>
+export async function connectToDatabase() {
+  if (!client) {
+    client = new MongoClient(uri)
+    await client.connect()
   }
 
-  if (!globalWithMongo._mongoClientPromise) {
-    client = new MongoClient(uri, options)
-    globalWithMongo._mongoClientPromise = client.connect()
+  if (!db) {
+    db = client.db("medischedule")
   }
-  clientPromise = globalWithMongo._mongoClientPromise
-} else {
-  client = new MongoClient(uri, options)
-  clientPromise = client.connect()
+
+  return { client, db }
 }
 
-export default clientPromise
+export async function getDatabase(): Promise<Db> {
+  const { db } = await connectToDatabase()
+  return db
+}
 
 // Generar 1000 profesionales (500 por empresa)
 function generateProfessionals() {
@@ -413,21 +414,5 @@ export async function getMockDatabase() {
         }).length
       },
     }),
-  }
-}
-
-// Modificar la función getDatabase para usar mock data si no hay MongoDB
-export async function getDatabase() {
-  try {
-    if (!process.env.MONGODB_URI) {
-      console.log("📝 Using mock database (no MongoDB URI found)")
-      return getMockDatabase()
-    }
-
-    const client = await clientPromise
-    return client.db("medischedule")
-  } catch (error) {
-    console.log("📝 Using mock database (MongoDB connection failed)")
-    return getMockDatabase()
   }
 }
