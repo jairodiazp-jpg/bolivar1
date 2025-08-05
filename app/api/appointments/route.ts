@@ -1,7 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 import { getDatabase } from "@/lib/mongodb"
 import { sendEmail, generateAppointmentEmailHTML } from "@/lib/email"
 import { sendWhatsAppMessage, formatAppointmentWhatsApp } from "@/lib/twilio"
+import { getAppointmentsByDate, getAppointmentsByProfessional } from "@/lib/optimized-queries"
+import { CACHE_TAGS, memoryCache } from "@/lib/cache"
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,29 +13,42 @@ export async function GET(request: NextRequest) {
     const doctorId = searchParams.get("doctorId")
     const companyId = searchParams.get("companyId")
     const status = searchParams.get("status")
+    const startDate = searchParams.get("startDate")
+    const endDate = searchParams.get("endDate")
 
+    // Use optimized cached queries when possible
+    if (date && !doctorId && !status) {
+      const appointments = await getAppointmentsByDate(date, companyId ? Number.parseInt(companyId) : undefined)
+      return NextResponse.json({
+        success: true,
+        data: appointments,
+        count: appointments.length,
+        cached: true,
+      })
+    }
+
+    if (doctorId && startDate && endDate) {
+      const appointments = await getAppointmentsByProfessional(Number.parseInt(doctorId), startDate, endDate)
+      return NextResponse.json({
+        success: true,
+        data: appointments,
+        count: appointments.length,
+        cached: true,
+      })
+    }
+
+    // Fallback to direct database query for complex filters
     const db = await getDatabase()
     const collection = db.collection("appointments")
 
     const query: any = {}
 
-    if (date) {
-      query.date = date
-    }
+    if (date) query.date = date
+    if (doctorId) query.doctorId = Number.parseInt(doctorId)
+    if (companyId) query.companyId = Number.parseInt(companyId)
+    if (status) query.status = status
 
-    if (doctorId) {
-      query.doctorId = Number.parseInt(doctorId)
-    }
-
-    if (companyId) {
-      query.companyId = Number.parseInt(companyId)
-    }
-
-    if (status) {
-      query.status = status
-    }
-
-    const appointments = await collection.find(query).toArray()
+    const appointments = await collection.find(query).sort({ date: -1, time: -1 }).toArray()
 
     return NextResponse.json({
       success: true,
@@ -86,14 +102,18 @@ export async function POST(request: NextRequest) {
     const result = await collection.insertOne(newAppointment)
     const appointmentWithId = { ...newAppointment, _id: result.insertedId }
 
-    // Send notifications
-    const notificationResult = await sendNotifications(appointmentWithId)
+    // Invalidate cache
+    revalidateTag(CACHE_TAGS.APPOINTMENTS)
+    memoryCache.clear()
+
+    // Send notifications asynchronously
+    const notificationPromise = sendNotifications(appointmentWithId)
 
     return NextResponse.json(
       {
         success: true,
         data: appointmentWithId,
-        notifications: notificationResult,
+        notifications: "processing",
       },
       { status: 201 },
     )
@@ -162,16 +182,18 @@ export async function PUT(request: NextRequest) {
 
     const updatedAppointment = await collection.findOne({ _id })
 
+    // Invalidate cache
+    revalidateTag(CACHE_TAGS.APPOINTMENTS)
+    memoryCache.clear()
+
     // Send update notifications if status changed to confirmed
-    let notificationResult = null
     if (updateData.status === "confirmed" && existingAppointment.status !== "confirmed") {
-      notificationResult = await sendNotifications(updatedAppointment)
+      sendNotifications(updatedAppointment).catch(console.error)
     }
 
     return NextResponse.json({
       success: true,
       data: updatedAppointment,
-      notifications: notificationResult,
     })
   } catch (error) {
     console.error("Error updating appointment:", error)
@@ -215,6 +237,10 @@ export async function DELETE(request: NextRequest) {
         { status: 404 },
       )
     }
+
+    // Invalidate cache
+    revalidateTag(CACHE_TAGS.APPOINTMENTS)
+    memoryCache.clear()
 
     return NextResponse.json({
       success: true,
