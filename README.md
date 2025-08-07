@@ -1,4 +1,4 @@
-# Sistema de Agendamiento Médico
+# Sistema de Agendamiento Médico PARA S.BOLIVAR
 
 Un sistema completo de gestión de citas médicas con múltiples roles de usuario, notificaciones automáticas y reportes avanzados.
 
@@ -110,7 +110,6 @@ TWILIO_WHATSAPP_NUMBER=+14155238886
 ## 🚀 Despliegue en Vercel
 
 1. **Conectar repositorio**:
-- Ir a [Vercel](https://vercel.com)
 - Import Git Repository
 - Seleccionar el repositorio
 
@@ -210,17 +209,4 @@ brew services restart mongodb/brew/mongodb-community
 4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
 5. Abrir Pull Request
 
-## 📝 Licencia
 
-Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
-
-## 📞 Soporte
-
-Para soporte técnico:
-- Email: soporte@medischedule.com
-- WhatsApp: +57 300 123 4567
-- Documentación: [docs.medischedule.com](https://docs.medischedule.com)
-
----
-
-**Desarrollado con ❤️ para mejorar la gestión médica**
