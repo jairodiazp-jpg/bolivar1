@@ -1,28 +1,46 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { verifyToken } from "./app/api/auth/route"
 
 export function middleware(request: NextRequest) {
-  const token = request.cookies.get("auth-token")?.value
   const { pathname } = request.nextUrl
 
-  // Rutas públicas que no requieren autenticación
-  const publicPaths = ["/", "/api/auth"]
-  const isPublicPath = publicPaths.some((path) => pathname.startsWith(path))
+  // Rutas que requieren autenticación
+  const protectedRoutes = ["/admin", "/empresa", "/profesional"]
 
-  // Si es una ruta pública, permitir acceso
-  if (isPublicPath) {
-    return NextResponse.next()
+  // Verificar si la ruta está protegida
+  const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
+
+  if (isProtectedRoute) {
+    const token =
+      request.headers.get("authorization")?.replace("Bearer ", "") || request.cookies.get("auth-token")?.value
+
+    if (!token) {
+      return NextResponse.redirect(new URL("/", request.url))
+    }
+
+    const decoded = verifyToken(token)
+    if (!decoded) {
+      return NextResponse.redirect(new URL("/", request.url))
+    }
+
+    // Verificar permisos por tipo de usuario
+    if (pathname.startsWith("/admin") && (decoded as any).type !== "admin") {
+      return NextResponse.redirect(new URL("/", request.url))
+    }
+
+    if (pathname.startsWith("/empresa") && !["empresa1", "empresa2", "empresa3"].includes((decoded as any).type)) {
+      return NextResponse.redirect(new URL("/", request.url))
+    }
+
+    if (pathname.startsWith("/profesional") && (decoded as any).type !== "profesional") {
+      return NextResponse.redirect(new URL("/", request.url))
+    }
   }
 
-  // Si no hay token y no es ruta pública, redirigir al login
-  if (!token) {
-    return NextResponse.redirect(new URL("/", request.url))
-  }
-
-  // Si hay token, permitir acceso
   return NextResponse.next()
 }
 
 export const config = {
-  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico|placeholder).*)"],
+  matcher: ["/admin/:path*", "/empresa/:path*", "/profesional/:path*"],
 }

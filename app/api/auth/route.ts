@@ -1,68 +1,89 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { authenticateUser, generateToken } from "@/lib/auth"
+import jwt from "jsonwebtoken"
 
-export const runtime = "nodejs"
+const JWT_SECRET = "your-secret-key-here"
+
+// Simulación de base de datos de usuarios
+const users = [
+  {
+    id: 1,
+    email: "admin@medischedule.com",
+    password: "admin123",
+    type: "admin",
+    name: "Administrador Sistema",
+  },
+  {
+    id: 2,
+    email: "empresa1@medischedule.com",
+    password: "empresa123",
+    type: "empresa1",
+    name: "Clínica San Rafael",
+  },
+  {
+    id: 3,
+    email: "empresa2@medischedule.com",
+    password: "empresa123",
+    type: "empresa2",
+    name: "Centro Médico Norte",
+  },
+  {
+    id: 4,
+    email: "empresa3@medischedule.com",
+    password: "empresa123",
+    type: "empresa3",
+    name: "Hospital Central",
+  },
+  {
+    id: 5,
+    email: "doctor@medischedule.com",
+    password: "doctor123",
+    type: "profesional",
+    name: "Dr. Carlos Mendoza",
+  },
+]
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, action } = await request.json()
+    const { email, password, userType } = await request.json()
 
-    if (action === "login") {
-      const user = authenticateUser(email, password)
+    // Validar credenciales
+    const user = users.find((u) => u.email === email && u.password === password && u.type === userType)
 
-      if (!user) {
-        return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 })
-      }
-
-      const token = generateToken(user)
-
-      const response = NextResponse.json({
-        success: true,
-        user: {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-          name: user.name,
-          companyId: user.companyId,
-        },
-      })
-
-      // Establecer cookie HTTP-only
-      response.cookies.set("auth-token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24, // 24 horas
-      })
-
-      return response
+    if (!user) {
+      return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 })
     }
 
-    if (action === "logout") {
-      const response = NextResponse.json({ success: true })
-      response.cookies.delete("auth-token")
-      return response
-    }
+    // Generar JWT token
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        type: user.type,
+        name: user.name,
+      },
+      JWT_SECRET,
+      { expiresIn: "24h" },
+    )
 
-    return NextResponse.json({ error: "Acción no válida" }, { status: 400 })
+    return NextResponse.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        type: user.type,
+        name: user.name,
+      },
+    })
   } catch (error) {
-    console.error("Auth error:", error)
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json({ error: "Error en el servidor" }, { status: 500 })
   }
 }
 
-export async function GET(request: NextRequest) {
+// Middleware para verificar JWT
+export function verifyToken(token: string) {
   try {
-    const token = request.cookies.get("auth-token")?.value
-
-    if (!token) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-    }
-
-    // Aquí podrías verificar el token y devolver info del usuario
-    return NextResponse.json({ authenticated: true })
+    return jwt.verify(token, JWT_SECRET)
   } catch (error) {
-    console.error("Auth check error:", error)
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+    return null
   }
 }

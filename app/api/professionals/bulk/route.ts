@@ -1,90 +1,191 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
-import { getCurrentUser } from "@/lib/auth"
-
-export const runtime = "nodejs"
+import { sendEmail, generateCredentialsEmailHTML } from "@/lib/email"
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser()
-    if (!user || (user.role !== "admin" && user.role !== "empresa")) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+    const body = await request.json()
+    const { professionals } = body
 
-    const { professionals } = await request.json()
-
-    if (!Array.isArray(professionals) || professionals.length === 0) {
-      return NextResponse.json({ error: "Lista de profesionales requerida" }, { status: 400 })
+    if (!professionals || !Array.isArray(professionals)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid professionals data",
+        },
+        { status: 400 },
+      )
     }
 
     const db = await getDatabase()
     const collection = db.collection("professionals")
 
-    const results = {
-      success: 0,
-      errors: [] as any[],
-      duplicates: 0,
-    }
+    const results = []
+    const createdProfessionals = []
 
-    for (let i = 0; i < professionals.length; i++) {
-      const professional = professionals[i]
-
+    for (const professionalData of professionals) {
       try {
         // Validar campos requeridos
-        if (!professional.name || !professional.email || !professional.specialty) {
-          results.errors.push({
-            row: i + 1,
-            error: "Campos requeridos: name, email, specialty",
-            data: professional,
+        const requiredFields = ["name", "specialty", "email", "companyId"]
+        const missingFields = requiredFields.filter((field) => !professionalData[field])
+
+        if (missingFields.length > 0) {
+          results.push({
+            success: false,
+            data: professionalData,
+            error: `Missing required fields: ${missingFields.join(", ")}`,
           })
           continue
         }
 
-        // Verificar duplicados
-        const existing = await collection.findOne({ email: professional.email })
-        if (existing) {
-          results.duplicates++
-          results.errors.push({
-            row: i + 1,
-            error: "Email ya existe",
-            data: professional,
+        // Verificar si el email ya existe
+        const existingProfessional = await collection.findOne({ email: professionalData.email })
+        if (existingProfessional) {
+          results.push({
+            success: false,
+            data: professionalData,
+            error: "Professional with this email already exists",
           })
           continue
         }
 
-        // Crear profesional
+        // Generate automatic credentials
+        const username = generateUsername(professionalData.name)
+        const password = generatePassword()
+
         const newProfessional = {
-          ...professional,
-          companyId: user.role === "empresa" ? user.companyId : professional.companyId || 1,
-          status: professional.status || "active",
+          ...professionalData,
+          status: professionalData.status || "active",
+          rating: professionalData.rating || 0,
+          weeklyHours: professionalData.weeklyHours || 40,
+          weeklyAppointments: professionalData.weeklyAppointments || 0,
           createdAt: new Date(),
           updatedAt: new Date(),
-          createdBy: user.id,
+          credentials: {
+            username,
+            password,
+          },
+          workHours: generateWorkHours(),
+          totalHoursThisMonth: Math.floor(Math.random() * 80) + 120,
         }
 
-        await collection.insertOne(newProfessional)
-        results.success++
+        const result = await collection.insertOne(newProfessional)
+        const professionalWithId = { ...newProfessional, _id: result.insertedId }
+
+        createdProfessionals.push(professionalWithId)
+
+        results.push({
+          success: true,
+          data: professionalWithId,
+          message: "Professional created successfully",
+        })
       } catch (error) {
-        results.errors.push({
-          row: i + 1,
-          error: "Error al procesar",
-          data: professional,
+        results.push({
+          success: false,
+          data: professionalData,
+          error: error instanceof Error ? error.message : "Unknown error",
         })
       }
     }
 
+    // Send credentials emails in background
+    sendCredentialsInBackground(createdProfessionals)
+
+    const successCount = results.filter((r) => r.success).length
+    const errorCount = results.filter((r) => !r.success).length
+
     return NextResponse.json({
       success: true,
-      results: {
+      results,
+      summary: {
         total: professionals.length,
-        success: results.success,
-        errors: results.errors.length,
-        duplicates: results.duplicates,
-        errorDetails: results.errors,
+        created: successCount,
+        errors: errorCount,
       },
     })
   } catch (error) {
     console.error("Error in bulk upload:", error)
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Error processing bulk upload",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
+}
+
+// Helper functions
+function generateUsername(name: string): string {
+  const cleanName = name
+    .toLowerCase()
+    .replace(/dr\.|dra\./g, "")
+    .trim()
+    .split(" ")
+
+  const firstName = cleanName[0] || ""
+  const lastName = cleanName[cleanName.length - 1] || ""
+
+  return firstName.charAt(0) + lastName + Math.floor(Math.random() * 100)
+}
+
+function generatePassword(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+  let password = ""
+  for (let i = 0; i < 12; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return password
+}
+
+function generateWorkHours() {
+  const workHours = []
+  const today = new Date()
+
+  // Generar horas de trabajo para los últimos 30 días
+  for (let i = 0; i < 30; i++) {
+    const date = new Date(today)
+    date.setDate(date.getDate() - i)
+
+    // Solo días laborables (lunes a viernes)
+    if (date.getDay() >= 1 && date.getDay() <= 5) {
+      const startHour = Math.floor(Math.random() * 3) + 7 // 7-9 AM
+      const endHour = Math.floor(Math.random() * 3) + 16 // 4-6 PM
+      const totalHours = endHour - startHour
+      const appointments = Math.floor(Math.random() * 8) + 3 // 3-10 citas
+
+      workHours.push({
+        date: date.toISOString().split("T")[0],
+        startTime: `${startHour.toString().padStart(2, "0")}:00`,
+        endTime: `${endHour.toString().padStart(2, "0")}:00`,
+        totalHours,
+        appointments,
+        status: Math.random() > 0.05 ? "completed" : "pending",
+      })
+    }
+  }
+
+  return workHours.reverse()
+}
+
+async function sendCredentialsInBackground(professionals: any[]) {
+  // Send emails in background without blocking the response
+  setTimeout(async () => {
+    for (const professional of professionals) {
+      try {
+        const emailHTML = generateCredentialsEmailHTML(professional)
+        const success = await sendEmail({
+          to: professional.email,
+          subject: "Credenciales de Acceso - MediSchedule",
+          html: emailHTML,
+          text: `Bienvenido al sistema MediSchedule. Usuario: ${professional.credentials.username}, Contraseña: ${professional.credentials.password}`,
+        })
+
+        console.log(`✅ Credentials sent to ${professional.email}: ${success}`)
+      } catch (error) {
+        console.error(`❌ Error sending credentials to ${professional.email}:`, error)
+      }
+    }
+  }, 1000)
 }

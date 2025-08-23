@@ -58,82 +58,58 @@
   }
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
+/* Performance optimizations */
+@layer utilities {
+  .will-change-transform {
+    will-change: transform;
+  }
 
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
-}
+  .will-change-scroll {
+    will-change: scroll-position;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
+  .gpu-accelerated {
+    transform: translateZ(0);
+  }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  .smooth-scroll {
+    scroll-behavior: smooth;
+  }
 }
 
 /* Loading animations */
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
   }
-}
-
-@keyframes pulse {
-  0%,
   100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
+    background-position: calc(200px + 100%) 0;
   }
 }
 
-.animate-spin {
-  animation: spin 1s linear infinite;
+.shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200px 100%;
+  animation: shimmer 1.5s infinite;
 }
 
-.animate-pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+/* Optimize font loading */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/inter-v12-latin-regular.woff2") format("woff2");
 }
 
-/* Smooth transitions */
-.transition-all {
-  transition-property: all;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
-}
-
-/* Focus styles */
-.focus-visible:focus {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
-}
-
-/* Print styles */
-@media print {
-  .no-print {
-    display: none !important;
-  }
-
-  .print-break {
-    page-break-after: always;
-  }
-}
-
-/* Responsive utilities */
-@media (max-width: 640px) {
-  .mobile-stack {
-    flex-direction: column;
-  }
-
-  .mobile-full {
-    width: 100%;
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

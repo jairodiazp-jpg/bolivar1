@@ -1,176 +1,231 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Calendar, Users, Activity } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Eye, EyeOff, Stethoscope } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 export default function LoginPage() {
+  const [userType, setUserType] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError("")
+  const handleLogin = async () => {
+    if (email && password && userType) {
+      setIsLoading(true)
 
-    try {
-      const response = await fetch("/api/auth", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          action: "login",
-        }),
-      })
+      // Simular autenticación
+      setTimeout(() => {
+        localStorage.setItem("userType", userType)
+        localStorage.setItem("userEmail", email)
 
-      const data = await response.json()
-
-      if (data.success) {
-        // Redirigir según el rol del usuario
-        switch (data.user.role) {
+        switch (userType) {
           case "admin":
             router.push("/admin/dashboard")
             break
-          case "empresa":
+          case "empresa1":
+          case "empresa2":
             router.push("/empresa/dashboard")
             break
           case "profesional":
             router.push("/profesional/dashboard")
             break
-          default:
-            router.push("/dashboard")
         }
-      } else {
-        setError(data.error || "Error de autenticación")
-      }
-    } catch (error) {
-      setError("Error de conexión")
-    } finally {
-      setLoading(false)
+        setIsLoading(false)
+      }, 1500)
     }
   }
 
-  const testCredentials = [
-    { role: "Admin", email: "admin@medischedule.com", password: "admin123" },
-    { role: "Empresa", email: "empresa1@segurosbolivar.com", password: "empresa123" },
-    { role: "Doctor", email: "doctor@medischedule.com", password: "doctor123" },
-  ]
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Panel izquierdo - Información */}
-        <div className="flex flex-col justify-center space-y-8">
-          <div className="text-center lg:text-left">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">MediSchedule</h1>
-            <p className="text-xl text-gray-600 mb-8">
-              Sistema integral de gestión de citas médicas para profesionales de la salud
-            </p>
-          </div>
+    <div className="min-h-screen bg-gradient-to-b from-green-400 via-green-500 to-green-600 relative overflow-hidden">
+      {/* Decorative circles */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-10 -left-10 w-32 h-32 bg-white/10 rounded-full"></div>
+        <div className="absolute top-20 -right-16 w-40 h-40 bg-white/5 rounded-full"></div>
+        <div className="absolute top-1/3 -left-8 w-24 h-24 bg-white/10 rounded-full"></div>
+        <div className="absolute bottom-1/3 -right-12 w-36 h-36 bg-white/5 rounded-full"></div>
+        <div className="absolute -bottom-10 left-1/4 w-28 h-28 bg-white/10 rounded-full"></div>
+        <div className="absolute bottom-20 right-1/4 w-20 h-20 bg-white/15 rounded-full"></div>
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white p-6 rounded-lg shadow-sm border">
-              <Calendar className="h-8 w-8 text-blue-600 mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-2">Gestión de Citas</h3>
-              <p className="text-sm text-gray-600">Programa y administra citas médicas de forma eficiente</p>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-sm border">
-              <Users className="h-8 w-8 text-green-600 mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-2">Profesionales</h3>
-              <p className="text-sm text-gray-600">Gestiona perfiles y horarios de profesionales médicos</p>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-sm border">
-              <Activity className="h-8 w-8 text-purple-600 mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-2">Reportes</h3>
-              <p className="text-sm text-gray-600">Analiza estadísticas y genera reportes detallados</p>
+      <div className="relative z-10 flex flex-col min-h-screen">
+        {/* Header with logo */}
+        <div className="flex-shrink-0 pt-12 pb-8 px-6 text-center">
+          <div className="inline-flex items-center justify-center w-24 h-24 bg-white/20 backdrop-blur-sm rounded-3xl mb-4 shadow-lg">
+            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-inner">
+              <Stethoscope className="w-8 h-8 text-green-600" />
             </div>
           </div>
-
-          {/* Credenciales de prueba */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="font-semibold text-gray-900 mb-4">Credenciales de Prueba</h3>
-            <div className="space-y-3">
-              {testCredentials.map((cred, index) => (
-                <div key={index} className="flex justify-between items-center text-sm">
-                  <span className="font-medium text-gray-700">{cred.role}:</span>
-                  <div className="text-right">
-                    <div className="text-gray-600">{cred.email}</div>
-                    <div className="text-gray-500">{cred.password}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="text-white">
+            <h1 className="text-lg font-bold tracking-wide">MEDISCHEDULE</h1>
+            <p className="text-sm text-white/80 mt-1">Sistema de Agendamiento</p>
           </div>
         </div>
 
-        {/* Panel derecho - Login */}
-        <div className="flex items-center justify-center">
-          <Card className="w-full max-w-md">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
-              <CardDescription>Ingresa tus credenciales para acceder al sistema</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Correo Electrónico</Label>
+        {/* Main content */}
+        <div className="flex-1 bg-white rounded-t-[2rem] px-6 pt-8 pb-6 shadow-2xl">
+          <div className="max-w-sm mx-auto">
+            {/* Welcome message */}
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">¡Bienvenido!</h2>
+              <p className="text-gray-600 text-sm">Accede a tu plataforma médica</p>
+            </div>
+
+            {/* Login form */}
+            <div className="space-y-6">
+              {/* User type selection */}
+              <div className="space-y-2">
+                <Label htmlFor="userType" className="text-gray-700 font-medium">
+                  Tipo de Usuario
+                </Label>
+                <Select value={userType} onValueChange={setUserType}>
+                  <SelectTrigger className="h-12 border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors">
+                    <SelectValue placeholder="Selecciona tu perfil" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                        <span>Administrador del Sistema</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="empresa1">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span>Hospital San Rafael</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="empresa2">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span>Clínica Norte</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="profesional">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-teal-500 rounded-full"></div>
+                        <span>Profesional de la Salud</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Email input */}
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-gray-700 font-medium">
+                  Correo Corporativo
+                </Label>
+                <div className="relative">
                   <Input
                     id="email"
                     type="email"
-                    placeholder="usuario@ejemplo.com"
+                    placeholder={
+                      userType === "admin"
+                        ? "admin@medischedule.com"
+                        : userType === "empresa1"
+                          ? "usuario@sanrafael.com"
+                          : userType === "empresa2"
+                            ? "usuario@clinicanorte.com"
+                            : userType === "profesional"
+                              ? "doctor@sanrafael.com o doctor@clinicanorte.com"
+                              : "tu@email.com"
+                    }
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    required
-                    disabled={loading}
+                    className="h-12 border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors pl-4 pr-4"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Contraseña</Label>
+              </div>
+
+              {/* Password input */}
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-gray-700 font-medium">
+                  Contraseña
+                </Label>
+                <div className="relative">
                   <Input
                     id="password"
-                    type="password"
-                    placeholder="••••••••"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Contraseña"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={loading}
+                    className="h-12 border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors pl-4 pr-12"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
+              </div>
 
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
+              {/* Forgot password */}
+              <div className="text-right">
+                <button className="text-sm text-gray-600 hover:text-green-600 transition-colors">
+                  ¿Olvidaste tu contraseña?
+                </button>
+              </div>
+
+              {/* Login button */}
+              <Button
+                onClick={handleLogin}
+                disabled={!email || !password || !userType || isLoading}
+                className="w-full h-12 bg-gradient-to-r from-yellow-400 to-green-500 hover:from-yellow-500 hover:to-green-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Iniciando sesión...</span>
+                  </div>
+                ) : (
+                  "Iniciar sesión"
                 )}
+              </Button>
 
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Iniciando sesión...
-                    </>
-                  ) : (
-                    "Iniciar Sesión"
-                  )}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+              {/* Sign up link */}
+              <div className="text-center pt-4">
+                <p className="text-sm text-gray-600">
+                  ¿No tienes una cuenta?{" "}
+                  <button className="text-green-600 font-semibold hover:text-green-700 transition-colors">
+                    Contacta a tu administrador
+                  </button>
+                </p>
+              </div>
+            </div>
+
+            {/* Demo credentials */}
+            <div className="mt-8 p-4 bg-gray-50 rounded-xl">
+              <p className="text-xs text-gray-600 font-medium mb-2">Credenciales de prueba:</p>
+              <div className="space-y-1 text-xs text-gray-500">
+                <p>
+                  <strong>Admin:</strong> admin@medischedule.com / admin123
+                </p>
+                <p>
+                  <strong>Hospital San Rafael:</strong> admin@sanrafael.com / empresa123
+                </p>
+                <p>
+                  <strong>Clínica Norte:</strong> admin@clinicanorte.com / empresa123
+                </p>
+                <p>
+                  <strong>Doctor:</strong> carlos.mendoza@sanrafael.com / doctor123
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Additional decorative elements */}
+      <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-white/5 to-transparent pointer-events-none"></div>
     </div>
   )
 }
