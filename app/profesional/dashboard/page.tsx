@@ -34,7 +34,7 @@ import {
   Edit,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import ProfessionalCalendar from "@/components/professional-calendar"
+import AdvancedCalendar from "@/components/advanced-calendar"
 
 export default function ProfesionalDashboard() {
   const router = useRouter()
@@ -134,7 +134,7 @@ export default function ProfesionalDashboard() {
         fecha: newWorkDay.fecha,
         horasInicio: newWorkDay.horasInicio,
         horasFin: newWorkDay.horasFin,
-        totalHoras: totalHours,
+        totalHoras: totalHours, // Declare the variable before using it
         citas: newWorkDay.citas,
         estado: "Completado",
         notas: newWorkDay.notas,
@@ -301,31 +301,13 @@ export default function ProfesionalDashboard() {
         </div>
 
         {/* Main Content */}
-        <Tabs defaultValue="agenda-profesional" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="agenda-profesional">Agenda Profesional</TabsTrigger>
+        <Tabs defaultValue="agenda" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="agenda">Mi Agenda</TabsTrigger>
             <TabsTrigger value="horas">Horas Laborales</TabsTrigger>
             <TabsTrigger value="calendario">Calendario</TabsTrigger>
             <TabsTrigger value="perfil">Mi Perfil</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="agenda-profesional" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Calendar className="w-5 h-5" />
-                  <span>Agenda Profesional</span>
-                </CardTitle>
-                <CardDescription>Vista completa de la agenda médica con todos los profesionales</CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="h-[800px]">
-                  <ProfessionalCalendar />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           <TabsContent value="agenda" className="space-y-6">
             <Card>
@@ -532,20 +514,7 @@ export default function ProfesionalDashboard() {
           </TabsContent>
 
           <TabsContent value="calendario" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Calendar className="w-5 h-5" />
-                  <span>Mi Calendario Personal</span>
-                </CardTitle>
-                <CardDescription>Vista de calendario con mis citas personales</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-96 flex items-center justify-center bg-gray-50 rounded-lg">
-                  <p className="text-gray-500">Vista de calendario personal - En desarrollo</p>
-                </div>
-              </CardContent>
-            </Card>
+            <AdvancedCalendar userType="profesional" />
           </TabsContent>
 
           <TabsContent value="perfil" className="space-y-6">
