@@ -1,307 +1,243 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { revalidateTag } from "next/cache"
 import { getDatabase } from "@/lib/mongodb"
+import { verifyToken } from "@/lib/auth"
 import { sendEmail, generateAppointmentEmailHTML } from "@/lib/email"
 import { sendWhatsAppMessage, formatAppointmentWhatsApp } from "@/lib/twilio"
-import { getAppointmentsByDate, getAppointmentsByProfessional } from "@/lib/optimized-queries"
-import { CACHE_TAGS, memoryCache } from "@/lib/cache"
 
 export async function GET(request: NextRequest) {
   try {
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    const user = verifyToken(token)
+    if (!user) {
+      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
+    const page = Number.parseInt(searchParams.get("page") || "1")
+    const limit = Number.parseInt(searchParams.get("limit") || "20")
     const date = searchParams.get("date")
     const doctorId = searchParams.get("doctorId")
-    const companyId = searchParams.get("companyId")
     const status = searchParams.get("status")
-    const startDate = searchParams.get("startDate")
-    const endDate = searchParams.get("endDate")
+    const companyId = searchParams.get("companyId")
 
-    // Use optimized cached queries when possible
-    if (date && !doctorId && !status) {
-      const appointments = await getAppointmentsByDate(date, companyId ? Number.parseInt(companyId) : undefined)
-      return NextResponse.json({
-        success: true,
-        data: appointments,
-        count: appointments.length,
-        cached: true,
-      })
-    }
-
-    if (doctorId && startDate && endDate) {
-      const appointments = await getAppointmentsByProfessional(Number.parseInt(doctorId), startDate, endDate)
-      return NextResponse.json({
-        success: true,
-        data: appointments,
-        count: appointments.length,
-        cached: true,
-      })
-    }
-
-    // Fallback to direct database query for complex filters
     const db = await getDatabase()
     const collection = db.collection("appointments")
 
+    // Build query based on user type
     const query: any = {}
 
-    if (date) query.date = date
-    if (doctorId) query.doctorId = Number.parseInt(doctorId)
-    if (companyId) query.companyId = Number.parseInt(companyId)
-    if (status) query.status = status
+    if (user.type === "profesional") {
+      query.doctorId = user.userId
+    } else if (user.type === "empresa" && user.companyId) {
+      query.companyId = user.companyId
+    } else if (companyId) {
+      query.companyId = Number.parseInt(companyId)
+    }
 
-    const appointments = await collection.find(query).sort({ date: -1, time: -1 }).toArray()
+    if (date) {
+      query.date = date
+    }
+
+    if (doctorId) {
+      query.doctorId = Number.parseInt(doctorId)
+    }
+
+    if (status) {
+      query.status = status
+    }
+
+    const skip = (page - 1) * limit
+    const appointments = await collection.find(query).sort({ date: -1, time: 1 }).skip(skip).limit(limit).toArray()
+
+    const total = await collection.countDocuments(query)
 
     return NextResponse.json({
-      success: true,
-      data: appointments,
-      count: appointments.length,
+      appointments,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
     })
   } catch (error) {
     console.error("Error fetching appointments:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Error fetching appointments",
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-
-    // Validar campos requeridos
-    const requiredFields = ["patientName", "patientEmail", "doctorName", "date", "time", "specialty"]
-    const missingFields = requiredFields.filter((field) => !body[field])
-
-    if (missingFields.length > 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Missing required fields",
-          missingFields,
-        },
-        { status: 400 },
-      )
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    const newAppointment = {
-      ...body,
-      status: body.status || "pending",
-      duration: body.duration || 30,
-      type: body.type || "Consulta",
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    const user = verifyToken(token)
+    if (!user) {
+      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const {
+      patientName,
+      patientEmail,
+      patientPhone,
+      doctorId,
+      doctorName,
+      specialty,
+      date,
+      time,
+      duration,
+      type,
+      notes,
+      location,
+      companyId,
+    } = body
+
+    if (!patientName || !patientEmail || !doctorId || !date || !time) {
+      return NextResponse.json(
+        { error: "Campos requeridos: patientName, patientEmail, doctorId, date, time" },
+        { status: 400 },
+      )
     }
 
     const db = await getDatabase()
     const collection = db.collection("appointments")
 
-    const result = await collection.insertOne(newAppointment)
-    const appointmentWithId = { ...newAppointment, _id: result.insertedId }
+    // Check for conflicts
+    const conflictingAppointment = await collection.findOne({
+      doctorId,
+      date,
+      time,
+      status: { $in: ["confirmed", "pending"] },
+    })
 
-    // Invalidate cache
-    revalidateTag(CACHE_TAGS.APPOINTMENTS)
-    memoryCache.clear()
+    if (conflictingAppointment) {
+      return NextResponse.json({ error: "Ya existe una cita en esa fecha y hora" }, { status: 400 })
+    }
 
-    // Send notifications asynchronously
-    const notificationPromise = sendNotifications(appointmentWithId)
+    const appointment = {
+      patientName,
+      patientEmail,
+      patientPhone: patientPhone || "",
+      doctorId,
+      doctorName: doctorName || "Dr. Desconocido",
+      specialty: specialty || "Medicina General",
+      date,
+      time,
+      duration: duration || 30,
+      type: type || "Consulta",
+      status: "confirmed",
+      notes: notes || "",
+      location: location || "Consultorio",
+      companyId: user.type === "empresa" ? user.companyId : companyId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: appointmentWithId,
-        notifications: "processing",
-      },
-      { status: 201 },
-    )
+    const result = await collection.insertOne(appointment)
+
+    // Send confirmation email
+    try {
+      await sendEmail({
+        to: patientEmail,
+        subject: "Confirmación de Cita Médica - MediSchedule",
+        html: generateAppointmentEmailHTML(appointment),
+      })
+    } catch (emailError) {
+      console.error("Error sending confirmation email:", emailError)
+    }
+
+    // Send WhatsApp notification if phone is provided
+    if (patientPhone) {
+      try {
+        await sendWhatsAppMessage({
+          to: patientPhone,
+          message: formatAppointmentWhatsApp(appointment),
+        })
+      } catch (whatsappError) {
+        console.error("Error sending WhatsApp:", whatsappError)
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      appointment: { ...appointment, _id: result.insertedId },
+    })
   } catch (error) {
     console.error("Error creating appointment:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Error creating appointment",
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    const user = verifyToken(token)
+    if (!user) {
+      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
+    }
+
     const body = await request.json()
-    const { _id, ...updateData } = body
-
-    if (!_id) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "ID is required",
-        },
-        { status: 400 },
-      )
-    }
-
-    const db = await getDatabase()
-    const collection = db.collection("appointments")
-
-    // Verificar si existe
-    const existingAppointment = await collection.findOne({ _id })
-    if (!existingAppointment) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Appointment not found",
-        },
-        { status: 404 },
-      )
-    }
-
-    const result = await collection.updateOne(
-      { _id },
-      {
-        $set: {
-          ...updateData,
-          updatedAt: new Date(),
-        },
-      },
-    )
-
-    if (result.matchedCount === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Appointment not found",
-        },
-        { status: 404 },
-      )
-    }
-
-    const updatedAppointment = await collection.findOne({ _id })
-
-    // Invalidate cache
-    revalidateTag(CACHE_TAGS.APPOINTMENTS)
-    memoryCache.clear()
-
-    // Send update notifications if status changed to confirmed
-    if (updateData.status === "confirmed" && existingAppointment.status !== "confirmed") {
-      sendNotifications(updatedAppointment).catch(console.error)
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: updatedAppointment,
-    })
-  } catch (error) {
-    console.error("Error updating appointment:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Error updating appointment",
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get("id")
+    const { id, status, ...updateData } = body
 
     if (!id) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "ID is required",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "ID requerido" }, { status: 400 })
     }
 
     const db = await getDatabase()
     const collection = db.collection("appointments")
 
-    const result = await collection.deleteOne({ _id: id })
-
-    if (result.deletedCount === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Appointment not found",
-        },
-        { status: 404 },
-      )
+    const updateFields = {
+      ...updateData,
+      updatedAt: new Date(),
     }
 
-    // Invalidate cache
-    revalidateTag(CACHE_TAGS.APPOINTMENTS)
-    memoryCache.clear()
-
-    return NextResponse.json({
-      success: true,
-      message: "Appointment deleted successfully",
-    })
-  } catch (error) {
-    console.error("Error deleting appointment:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Error deleting appointment",
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
-  }
-}
-
-// Enhanced notification function with better error handling
-async function sendNotifications(appointment: any) {
-  const results = {
-    email: { success: false, error: null },
-    whatsapp: { success: false, error: null },
-  }
-
-  try {
-    // Send email notification
-    if (appointment.patientEmail) {
-      const emailHTML = generateAppointmentEmailHTML(appointment)
-      const emailSuccess = await sendEmail({
-        to: appointment.patientEmail,
-        subject: `Confirmación de Cita - ${appointment.doctorName}`,
-        html: emailHTML,
-        text: `Tu cita con ${appointment.doctorName} está programada para el ${appointment.date} a las ${appointment.time}`,
-      })
-      results.email.success = emailSuccess
+    if (status) {
+      updateFields.status = status
     }
-  } catch (error) {
-    results.email.error = error instanceof Error ? error.message : "Unknown email error"
-    console.error("Error sending email:", error)
-  }
 
-  try {
-    // Send WhatsApp notification
-    if (appointment.patientPhone) {
-      const whatsappMessage = formatAppointmentWhatsApp(appointment)
-      const whatsappSuccess = await sendWhatsAppMessage({
-        to: appointment.patientPhone,
-        message: whatsappMessage,
-      })
-      results.whatsapp.success = whatsappSuccess
+    const result = await collection.updateOne({ _id: id }, { $set: updateFields })
+
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: "Cita no encontrada" }, { status: 404 })
     }
+
+    // If status changed, send notification
+    if (status) {
+      const appointment = await collection.findOne({ _id: id })
+      if (appointment && appointment.patientEmail) {
+        try {
+          let subject = "Actualización de Cita Médica"
+          if (status === "cancelled") {
+            subject = "Cita Cancelada - MediSchedule"
+          } else if (status === "confirmed") {
+            subject = "Cita Confirmada - MediSchedule"
+          }
+
+          await sendEmail({
+            to: appointment.patientEmail,
+            subject,
+            html: generateAppointmentEmailHTML({ ...appointment, status }),
+          })
+        } catch (emailError) {
+          console.error("Error sending status update email:", emailError)
+        }
+      }
+    }
+
+    return NextResponse.json({ success: true })
   } catch (error) {
-    results.whatsapp.error = error instanceof Error ? error.message : "Unknown WhatsApp error"
-    console.error("Error sending WhatsApp:", error)
+    console.error("Error updating appointment:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
-
-  // Log successful notifications
-  console.log(
-    `📧 Email: ${results.email.success ? "✅" : "❌"}, WhatsApp: ${results.whatsapp.success ? "✅" : "❌"} for appointment ${appointment._id}`,
-  )
-
-  return results
 }

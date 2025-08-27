@@ -1,260 +1,383 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Calendar, FileText, Download, TrendingUp, Users, DollarSign, BarChart3 } from "lucide-react"
+import { BarChart3, PieChart, TrendingUp, Download, Calendar, Users, DollarSign } from "lucide-react"
 
-interface ReportsProps {
-  userType: "admin" | "empresa"
+interface ReportsDashboardProps {
+  userType: "admin" | "empresa" | "profesional"
   companyId?: number
 }
 
-export default function ReportsDashboard({ userType, companyId }: ReportsProps) {
-  const [reportType, setReportType] = useState("")
-  const [startDate, setStartDate] = useState("")
-  const [endDate, setEndDate] = useState("")
-  const [isGenerating, setIsGenerating] = useState(false)
+export default function ReportsDashboard({ userType, companyId }: ReportsDashboardProps) {
+  const [reportType, setReportType] = useState("appointments")
+  const [dateRange, setDateRange] = useState({
+    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0],
+    endDate: new Date().toISOString().split("T")[0],
+  })
+  const [reportData, setReportData] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
 
-  const handleGenerateReport = async () => {
-    if (!reportType) return
+  useEffect(() => {
+    loadReport()
+  }, [reportType, dateRange])
 
-    setIsGenerating(true)
-
+  const loadReport = async () => {
+    setLoading(true)
     try {
       const params = new URLSearchParams({
         type: reportType,
-        ...(startDate && { startDate }),
-        ...(endDate && { endDate }),
-        ...(companyId && { companyId: companyId.toString() }),
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
       })
 
+      if (companyId) {
+        params.append("companyId", companyId.toString())
+      }
+
       const response = await fetch(`/api/reports?${params}`)
+      const data = await response.json()
 
       if (response.ok) {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.href = url
-        a.download = `reporte-${reportType}-${new Date().toISOString().split("T")[0]}.pdf`
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
+        setReportData(data)
       } else {
-        console.error("Error generating report")
+        console.error("Error loading report:", data.error)
       }
     } catch (error) {
-      console.error("Error:", error)
+      console.error("Error loading report:", error)
     } finally {
-      setIsGenerating(false)
+      setLoading(false)
     }
   }
 
-  const reportTypes = [
-    {
-      id: "appointments",
-      name: "Reporte de Citas",
-      description: "Listado completo de citas médicas con filtros por fecha y estado",
-      icon: Calendar,
-      color: "bg-blue-500",
-    },
-    {
-      id: "professionals",
-      name: "Reporte de Profesionales",
-      description: "Estado, rendimiento y estadísticas de profesionales médicos",
-      icon: Users,
-      color: "bg-green-500",
-    },
-    {
-      id: "metrics",
-      name: "Reporte de Métricas",
-      description: "Indicadores clave de rendimiento (KPIs) del sistema",
-      icon: BarChart3,
-      color: "bg-purple-500",
-    },
-    ...(userType === "admin"
-      ? [
-          {
-            id: "financial",
-            name: "Reporte Financiero",
-            description: "Análisis detallado de ingresos, gastos y rentabilidad",
-            icon: DollarSign,
-            color: "bg-yellow-500",
-          },
-        ]
-      : []),
-  ]
+  const exportReport = () => {
+    if (!reportData) return
+
+    const dataStr = JSON.stringify(reportData, null, 2)
+    const dataBlob = new Blob([dataStr], { type: "application/json" })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `reporte-${reportType}-${new Date().toISOString().split("T")[0]}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="space-y-6">
-      {/* Report Types Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {reportTypes.map((report) => (
-          <Card
-            key={report.id}
-            className={`cursor-pointer transition-all hover:shadow-lg ${
-              reportType === report.id ? "ring-2 ring-green-500 bg-green-50" : ""
-            }`}
-            onClick={() => setReportType(report.id)}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-4">
-                <div className={`w-12 h-12 ${report.color} rounded-lg flex items-center justify-center`}>
-                  <report.icon className="w-6 h-6 text-white" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900">{report.name}</h3>
-                  <p className="text-sm text-gray-600 mt-1">{report.description}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Report Configuration */}
+      {/* Controls */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <BarChart3 className="w-5 h-5" />
-            <span>Configuración del Reporte</span>
+            <span>Generador de Reportes</span>
           </CardTitle>
-          <CardDescription>Configura los parámetros para generar tu reporte personalizado</CardDescription>
+          <CardDescription>Genera reportes detallados sobre el rendimiento del sistema</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="startDate">Fecha de Inicio</Label>
-              <Input id="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <Label>Tipo de Reporte</Label>
+              <Select value={reportType} onValueChange={setReportType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="appointments">Citas Médicas</SelectItem>
+                  {userType !== "profesional" && <SelectItem value="professionals">Profesionales</SelectItem>}
+                  <SelectItem value="revenue">Ingresos</SelectItem>
+                  <SelectItem value="performance">Rendimiento</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="endDate">Fecha de Fin</Label>
-              <Input id="endDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <Label>Fecha Inicio</Label>
+              <Input
+                type="date"
+                value={dateRange.startDate}
+                onChange={(e) => setDateRange((prev) => ({ ...prev, startDate: e.target.value }))}
+              />
             </div>
-          </div>
-
-          <div className="flex justify-between items-center pt-4 border-t">
-            <div className="text-sm text-gray-600">
-              {reportType ? (
-                <span>
-                  Generando: <strong>{reportTypes.find((r) => r.id === reportType)?.name}</strong>
-                  {startDate && endDate && (
-                    <span>
-                      {" "}
-                      del {startDate} al {endDate}
-                    </span>
-                  )}
-                </span>
-              ) : (
-                "Selecciona un tipo de reporte para continuar"
-              )}
+            <div className="space-y-2">
+              <Label>Fecha Fin</Label>
+              <Input
+                type="date"
+                value={dateRange.endDate}
+                onChange={(e) => setDateRange((prev) => ({ ...prev, endDate: e.target.value }))}
+              />
             </div>
-            <Button
-              onClick={handleGenerateReport}
-              disabled={!reportType || isGenerating}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {isGenerating ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Generando...
-                </>
-              ) : (
-                <>
+            <div className="space-y-2">
+              <Label>&nbsp;</Label>
+              <div className="flex space-x-2">
+                <Button onClick={loadReport} disabled={loading}>
+                  {loading ? "Generando..." : "Generar"}
+                </Button>
+                <Button variant="outline" onClick={exportReport} disabled={!reportData}>
                   <Download className="w-4 h-4 mr-2" />
-                  Generar PDF
-                </>
-              )}
-            </Button>
+                  Exportar
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Quick Reports */}
+      {/* Report Content */}
+      {reportData && (
+        <Tabs defaultValue="overview" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="overview">Resumen</TabsTrigger>
+            <TabsTrigger value="charts">Gráficos</TabsTrigger>
+            <TabsTrigger value="details">Detalles</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-6">
+            {reportType === "appointments" && <AppointmentsOverview data={reportData.data} />}
+            {reportType === "professionals" && <ProfessionalsOverview data={reportData.data} />}
+            {reportType === "revenue" && <RevenueOverview data={reportData.data} />}
+            {reportType === "performance" && <PerformanceOverview data={reportData.data} />}
+          </TabsContent>
+
+          <TabsContent value="charts" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Visualización de Datos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8 text-gray-500">
+                  <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>Los gráficos interactivos estarán disponibles próximamente</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="details" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Datos Detallados</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <pre className="bg-gray-50 p-4 rounded-lg overflow-auto text-sm">
+                  {JSON.stringify(reportData, null, 2)}
+                </pre>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      )}
+    </div>
+  )
+}
+
+function AppointmentsOverview({ data }: { data: any }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <FileText className="w-5 h-5" />
-            <span>Reportes Rápidos</span>
-          </CardTitle>
-          <CardDescription>Genera reportes predefinidos con un solo clic</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Button
-              variant="outline"
-              className="h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"
-              onClick={() => {
-                setReportType("appointments")
-                setStartDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
-                setEndDate(new Date().toISOString().split("T")[0])
-                setTimeout(handleGenerateReport, 100)
-              }}
-            >
-              <Calendar className="w-6 h-6" />
-              <span className="text-sm">Citas Última Semana</span>
-            </Button>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Total Citas</p>
+              <p className="text-3xl font-bold">{data.total}</p>
+            </div>
+            <Calendar className="w-8 h-8 text-blue-600" />
+          </div>
+        </CardContent>
+      </Card>
 
-            <Button
-              variant="outline"
-              className="h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"
-              onClick={() => {
-                setReportType("appointments")
-                setStartDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0])
-                setEndDate(new Date().toISOString().split("T")[0])
-                setTimeout(handleGenerateReport, 100)
-              }}
-            >
-              <TrendingUp className="w-6 h-6" />
-              <span className="text-sm">Citas Este Mes</span>
-            </Button>
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Confirmadas</p>
+              <p className="text-3xl font-bold text-green-600">
+                {data.byStatus.find((s: any) => s._id === "confirmed")?.count || 0}
+              </p>
+            </div>
+            <Calendar className="w-8 h-8 text-green-600" />
+          </div>
+        </CardContent>
+      </Card>
 
-            <Button
-              variant="outline"
-              className="h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"
-              onClick={() => {
-                setReportType("professionals")
-                setStartDate("")
-                setEndDate("")
-                setTimeout(handleGenerateReport, 100)
-              }}
-            >
-              <Users className="w-6 h-6" />
-              <span className="text-sm">Todos los Profesionales</span>
-            </Button>
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Canceladas</p>
+              <p className="text-3xl font-bold text-red-600">
+                {data.byStatus.find((s: any) => s._id === "cancelled")?.count || 0}
+              </p>
+            </div>
+            <Calendar className="w-8 h-8 text-red-600" />
+          </div>
+        </CardContent>
+      </Card>
 
-            <Button
-              variant="outline"
-              className="h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"
-              onClick={() => {
-                setReportType("metrics")
-                setStartDate("")
-                setEndDate("")
-                setTimeout(handleGenerateReport, 100)
-              }}
-            >
-              <BarChart3 className="w-6 h-6" />
-              <span className="text-sm">Métricas del Sistema</span>
-            </Button>
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Especialidades</p>
+              <p className="text-3xl font-bold">{data.bySpecialty.length}</p>
+            </div>
+            <Users className="w-8 h-8 text-purple-600" />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
 
-            {userType === "admin" && (
-              <Button
-                variant="outline"
-                className="h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"
-                onClick={() => {
-                  setReportType("financial")
-                  setStartDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0])
-                  setEndDate(new Date().toISOString().split("T")[0])
-                  setTimeout(handleGenerateReport, 100)
-                }}
-              >
-                <DollarSign className="w-6 h-6" />
-                <span className="text-sm">Financiero Mensual</span>
-              </Button>
-            )}
+function ProfessionalsOverview({ data }: { data: any }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Total Profesionales</p>
+              <p className="text-3xl font-bold">{data.total}</p>
+            </div>
+            <Users className="w-8 h-8 text-blue-600" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Activos</p>
+              <p className="text-3xl font-bold text-green-600">
+                {data.byStatus.find((s: any) => s._id === "active")?.count || 0}
+              </p>
+            </div>
+            <Users className="w-8 h-8 text-green-600" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Rating Promedio</p>
+              <p className="text-3xl font-bold text-yellow-600">{data.averageRating.toFixed(1)}</p>
+            </div>
+            <TrendingUp className="w-8 h-8 text-yellow-600" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Especialidades</p>
+              <p className="text-3xl font-bold">{data.bySpecialty.length}</p>
+            </div>
+            <Users className="w-8 h-8 text-purple-600" />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function RevenueOverview({ data }: { data: any }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Ingresos Totales</p>
+              <p className="text-3xl font-bold text-green-600">${data.total.toLocaleString()}</p>
+            </div>
+            <DollarSign className="w-8 h-8 text-green-600" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Citas Completadas</p>
+              <p className="text-3xl font-bold">{data.totalAppointments}</p>
+            </div>
+            <Calendar className="w-8 h-8 text-blue-600" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Promedio por Cita</p>
+              <p className="text-3xl font-bold">${(data.total / data.totalAppointments || 0).toLocaleString()}</p>
+            </div>
+            <TrendingUp className="w-8 h-8 text-purple-600" />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function PerformanceOverview({ data }: { data: any }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Tasa de Completación</p>
+              <p className="text-3xl font-bold text-green-600">{data.completionRate.toFixed(1)}%</p>
+            </div>
+            <TrendingUp className="w-8 h-8 text-green-600" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Tasa de Cancelación</p>
+              <p className="text-3xl font-bold text-red-600">{data.cancellationRate.toFixed(1)}%</p>
+            </div>
+            <TrendingUp className="w-8 h-8 text-red-600" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Duración Promedio</p>
+              <p className="text-3xl font-bold">{data.averageDuration} min</p>
+            </div>
+            <Calendar className="w-8 h-8 text-blue-600" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Horas Pico</p>
+              <p className="text-3xl font-bold">{data.busyHours[0]?._id || "N/A"}</p>
+            </div>
+            <Calendar className="w-8 h-8 text-purple-600" />
           </div>
         </CardContent>
       </Card>

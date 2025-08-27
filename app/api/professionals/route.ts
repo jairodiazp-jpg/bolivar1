@@ -1,200 +1,206 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
+import { verifyToken } from "@/lib/auth"
 import { sendEmail, generateCredentialsEmailHTML } from "@/lib/email"
 
 export async function GET(request: NextRequest) {
   try {
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    const user = verifyToken(token)
+    if (!user) {
+      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
+    const page = Number.parseInt(searchParams.get("page") || "1")
+    const limit = Number.parseInt(searchParams.get("limit") || "20")
+    const search = searchParams.get("search") || ""
     const companyId = searchParams.get("companyId")
-    const status = searchParams.get("status")
     const specialty = searchParams.get("specialty")
 
     const db = await getDatabase()
     const collection = db.collection("professionals")
 
+    // Build query
     const query: any = {}
 
-    if (companyId) {
+    if (user.type === "empresa" && user.companyId) {
+      query.companyId = user.companyId
+    } else if (companyId) {
       query.companyId = Number.parseInt(companyId)
     }
 
-    if (status) {
-      query.status = status
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { specialty: { $regex: search, $options: "i" } },
+      ]
     }
 
     if (specialty) {
       query.specialty = specialty
     }
 
-    const professionals = await collection.find(query).toArray()
+    const skip = (page - 1) * limit
+    const professionals = await collection.find(query).skip(skip).limit(limit).toArray()
+
+    const total = await collection.countDocuments(query)
 
     return NextResponse.json({
-      success: true,
-      data: professionals,
-      count: professionals.length,
+      professionals,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
     })
   } catch (error) {
     console.error("Error fetching professionals:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Error fetching professionals",
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-
-    // Validar campos requeridos
-    const requiredFields = ["name", "specialty", "email", "companyId"]
-    const missingFields = requiredFields.filter((field) => !body[field])
-
-    if (missingFields.length > 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Missing required fields",
-          missingFields,
-        },
-        { status: 400 },
-      )
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    // Generate automatic credentials
-    const username = generateUsername(body.name)
-    const password = generatePassword()
+    const user = verifyToken(token)
+    if (!user || (user.type !== "admin" && user.type !== "empresa")) {
+      return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
+    }
 
-    const newProfessional = {
-      ...body,
-      status: body.status || "active",
-      rating: body.rating || 0,
-      weeklyHours: body.weeklyHours || 40,
-      weeklyAppointments: body.weeklyAppointments || 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      credentials: {
-        username,
-        password,
-      },
+    const body = await request.json()
+    const { name, specialty, email, phone, companyId, weeklyHours } = body
+
+    if (!name || !specialty || !email || !phone) {
+      return NextResponse.json({ error: "Campos requeridos: name, specialty, email, phone" }, { status: 400 })
     }
 
     const db = await getDatabase()
     const collection = db.collection("professionals")
 
-    // Verificar si el email ya existe
-    const existingProfessional = await collection.findOne({ email: body.email })
+    // Check if email already exists
+    const existingProfessional = await collection.findOne({ email })
     if (existingProfessional) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Professional with this email already exists",
-        },
-        { status: 409 },
-      )
+      return NextResponse.json({ error: "Ya existe un profesional con este email" }, { status: 400 })
     }
 
-    const result = await collection.insertOne(newProfessional)
-    const professionalWithId = { ...newProfessional, _id: result.insertedId }
+    // Generate credentials
+    const username = email.split("@")[0]
+    const password = Math.random().toString(36).slice(-8)
 
-    // Send credentials via email
-    const credentialsResult = await sendCredentials(professionalWithId)
-
-    return NextResponse.json(
-      {
-        success: true,
-        data: professionalWithId,
-        credentialsSent: credentialsResult,
+    const professional = {
+      name,
+      specialty,
+      email,
+      phone,
+      companyId: user.type === "empresa" ? user.companyId : companyId,
+      weeklyHours: weeklyHours || 40,
+      status: "active",
+      rating: "5.0",
+      totalHoursThisMonth: 0,
+      credentials: {
+        username,
+        password,
       },
-      { status: 201 },
-    )
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const result = await collection.insertOne(professional)
+
+    // Send credentials email
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Credenciales de Acceso - MediSchedule",
+        html: generateCredentialsEmailHTML({
+          name,
+          specialty,
+          companyName: "Hospital",
+          credentials: { username, password },
+        }),
+      })
+    } catch (emailError) {
+      console.error("Error sending credentials email:", emailError)
+    }
+
+    return NextResponse.json({
+      success: true,
+      professional: { ...professional, _id: result.insertedId },
+    })
   } catch (error) {
     console.error("Error creating professional:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Error creating professional",
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { _id, ...updateData } = body
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
 
-    if (!_id) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "ID is required",
-        },
-        { status: 400 },
-      )
+    const user = verifyToken(token)
+    if (!user) {
+      return NextResponse.json({ error: "Token inválido" }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { id, ...updateData } = body
+
+    if (!id) {
+      return NextResponse.json({ error: "ID requerido" }, { status: 400 })
     }
 
     const db = await getDatabase()
     const collection = db.collection("professionals")
 
-    const result = await collection.updateOne(
-      { _id },
-      {
-        $set: {
-          ...updateData,
-          updatedAt: new Date(),
-        },
-      },
-    )
-
-    if (result.matchedCount === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Professional not found",
-        },
-        { status: 404 },
-      )
+    const updateFields = {
+      ...updateData,
+      updatedAt: new Date(),
     }
 
-    const updatedProfessional = await collection.findOne({ _id })
+    const result = await collection.updateOne({ _id: id }, { $set: updateFields })
 
-    return NextResponse.json({
-      success: true,
-      data: updatedProfessional,
-    })
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: "Profesional no encontrado" }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error updating professional:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Error updating professional",
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
+    const token = request.cookies.get("auth-token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    const user = verifyToken(token)
+    if (!user || user.type !== "admin") {
+      return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get("id")
 
     if (!id) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "ID is required",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "ID requerido" }, { status: 400 })
     }
 
     const db = await getDatabase()
@@ -203,69 +209,12 @@ export async function DELETE(request: NextRequest) {
     const result = await collection.deleteOne({ _id: id })
 
     if (result.deletedCount === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Professional not found",
-        },
-        { status: 404 },
-      )
+      return NextResponse.json({ error: "Profesional no encontrado" }, { status: 404 })
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Professional deleted successfully",
-    })
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting professional:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Error deleting professional",
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
-  }
-}
-
-// Helper functions
-function generateUsername(name: string): string {
-  const cleanName = name
-    .toLowerCase()
-    .replace(/dr\.|dra\./g, "")
-    .trim()
-    .split(" ")
-
-  const firstName = cleanName[0] || ""
-  const lastName = cleanName[cleanName.length - 1] || ""
-
-  return firstName.charAt(0) + lastName + Math.floor(Math.random() * 100)
-}
-
-function generatePassword(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-  let password = ""
-  for (let i = 0; i < 12; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return password
-}
-
-async function sendCredentials(professional: any) {
-  try {
-    const emailHTML = generateCredentialsEmailHTML(professional)
-    const success = await sendEmail({
-      to: professional.email,
-      subject: "Credenciales de Acceso - MediSchedule",
-      html: emailHTML,
-      text: `Bienvenido al sistema MediSchedule. Usuario: ${professional.credentials.username}, Contraseña: ${professional.credentials.password}`,
-    })
-
-    console.log(`✅ Credentials sent to ${professional.email}: ${success}`)
-    return success
-  } catch (error) {
-    console.error("Error sending credentials:", error)
-    return false
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

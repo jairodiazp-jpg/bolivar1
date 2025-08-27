@@ -1,271 +1,226 @@
-# 🏥 MediSchedule - Sistema de Agendamiento Médico
+# Sistema de Agendamiento Médico
 
-Sistema completo de agendamiento médico con funcionalidades avanzadas para empresas, profesionales médicos y administradores.
+Un sistema completo de gestión de citas médicas con múltiples roles de usuario, notificaciones automáticas y reportes avanzados.
 
-## 🚀 Características Principales
+## 🚀 Características
 
-### ✅ **Funcionalidades Implementadas**
+### Roles de Usuario
+- **Administrador**: Gestión completa del sistema, empresas y profesionales
+- **Empresa**: Gestión de profesionales y citas de su organización
+- **Profesional**: Gestión de agenda personal y citas
 
-- **🔐 Autenticación JWT** con middleware de protección
-- **📊 Dashboard Administrativo** con métricas en tiempo real
-- **🏢 Gestión Multi-empresa** con vistas independientes
-- **👨‍⚕️ Gestión de Profesionales** con carga masiva
-- **📅 Calendario Avanzado** con drag & drop
-- **📧 Notificaciones por Email** automáticas (con fallback)
-- **💬 WhatsApp con Twilio** para confirmaciones (con fallback)
-- **📄 Reportes PDF** profesionales con 4 tipos
-- **🗄️ Base de datos MongoDB** con datos de ejemplo
-- **🎨 Diseño Responsive** con colores corporativos
+### Funcionalidades Principales
+- ✅ Autenticación JWT segura
+- ✅ Gestión de citas médicas
+- ✅ Carga masiva de profesionales
+- ✅ Notificaciones por email y WhatsApp
+- ✅ Reportes y estadísticas avanzadas
+- ✅ Dashboard diferenciado por rol
+- ✅ Interfaz responsive
+- ✅ Base de datos MongoDB
 
-### 🎯 **Tipos de Usuario**
+## 🛠️ Tecnologías
 
-1. **Administrador**: Dashboard completo, gestión de empresas, métricas globales
-2. **Empresas (3)**: Gestión de profesionales, citas, reportes por empresa
-3. **Profesionales**: Agenda personal, registro de horas, perfil individual
+- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes, MongoDB
+- **UI**: shadcn/ui, Radix UI
+- **Autenticación**: JWT
+- **Notificaciones**: Nodemailer, Twilio
+- **Despliegue**: Vercel
 
-## 🛠️ **Tecnologías Utilizadas**
+## 📦 Instalación
 
-- **Frontend**: Next.js 14, React, TypeScript, TailwindCSS
-- **Backend**: Next.js API Routes, MongoDB (con fallback a datos mock)
-- **UI**: shadcn/ui components
-- **Notificaciones**: Nodemailer, Twilio WhatsApp (con simulación)
-- **Reportes**: jsPDF con tablas automáticas
-- **Autenticación**: JWT con middleware
-
-## 📦 **Instalación Rápida**
-
-1. **Clonar e instalar**
+1. **Clonar el repositorio**
 \`\`\`bash
 git clone <repository-url>
 cd medical-appointment-system
+\`\`\`
+
+2. **Instalar dependencias**
+\`\`\`bash
 npm install
 \`\`\`
 
-2. **Configurar variables básicas**
+3. **Configurar variables de entorno**
 \`\`\`bash
 cp .env.example .env.local
 \`\`\`
 
-Edita `.env.local` con al menos:
-\`\`\`env
-JWT_SECRET=tu-clave-secreta-jwt-muy-segura
-\`\`\`
+Edita `.env.local` con tus configuraciones:
+- MongoDB URI
+- JWT Secret
+- Credenciales SMTP
+- Credenciales Twilio
 
-3. **Ejecutar**
+4. **Ejecutar en desarrollo**
 \`\`\`bash
 npm run dev
 \`\`\`
 
-¡Listo! El sistema funciona con datos de ejemplo sin necesidad de configurar servicios externos.
+## 🔧 Configuración
 
-## 🔧 **Configuración Opcional de Servicios**
+### Base de Datos MongoDB
 
-### **MongoDB (Opcional)**
-- **Sin configurar**: Usa datos de ejemplo en memoria
-- **Local**: `mongodb://localhost:27017/medischedule`
-- **Cloud**: MongoDB Atlas URI
-
-### **Email (Opcional)**
-- **Sin configurar**: Simula envíos en consola
-- **Gmail**: Habilita 2FA y genera contraseña de app
-- **Otros**: Configura SMTP personalizado
-
-### **Twilio WhatsApp (Opcional)**
-- **Sin configurar**: Simula envíos en consola
-- **Con Twilio**: Configura Sandbox de WhatsApp
-
-## 👥 **Credenciales de Prueba**
-
-\`\`\`
-🔑 Administrador:
-- Email: admin@medischedule.com
-- Password: admin123
-
-🏢 Empresa 1:
-- Email: empresa1@medischedule.com
-- Password: empresa123
-
-👨‍⚕️ Profesional:
-- Email: doctor@medischedule.com
-- Password: doctor123
-\`\`\`
-
-## 📊 **Funcionalidades Detalladas**
-
-### **Dashboard Administrativo**
-- ✅ Métricas globales del sistema
-- ✅ Gestión de empresas registradas
-- ✅ Top profesionales por rendimiento
-- ✅ 4 tipos de reportes PDF
-
-### **Panel de Empresas**
-- ✅ Vista exclusiva por empresa
-- ✅ Carga masiva de profesionales (simulada)
-- ✅ Gestión completa de citas médicas
-- ✅ Calendario visual con drag & drop
-- ✅ Reportes personalizados
-
-### **Panel de Profesionales**
-- ✅ Perfil personal completo
-- ✅ Agenda diaria y mensual
-- ✅ Registro de horas trabajadas
-- ✅ Vista de citas con estados
-
-### **Sistema de Citas Avanzado**
-- ✅ Calendario interactivo con drag & drop
-- ✅ Estados: Confirmada, Pendiente, Cancelada
-- ✅ Formularios modales completos
-- ✅ Validación de campos requeridos
-- ✅ Colores pastel por especialidad
-- ✅ Notificaciones automáticas
-
-### **Reportes PDF Profesionales**
-- **📋 Reporte de Citas**: Filtros por fecha, estado, profesional con métricas
-- **👥 Reporte de Profesionales**: Estado, rendimiento, horas trabajadas
-- **💰 Reporte Financiero**: Ingresos, gastos, rentabilidad (solo admin)
-- **📊 Reporte de Métricas**: KPIs y indicadores de rendimiento
-- Diseño profesional con logo corporativo
-- Descarga automática en PDF
-- Reportes rápidos predefinidos
-
-## 🎨 **Diseño**
-
-### **Colores Corporativos**
-- 🟢 Verde principal: `#15803d` (botones, headers)
-- 🟡 Amarillo corporativo: `#eab308` (acentos)
-- ⚪ Fondo: Blanco con grises suaves
-
-### **Especialidades con Colores Pastel**
-- 💗 Cardiología: Rosa suave
-- 💙 Pediatría: Azul suave  
-- 💜 Neurología: Púrpura suave
-- 🩷 Ginecología: Rosa pastel
-- 🧡 Dermatología: Naranja suave
-- 🩵 Oftalmología: Cian suave
-
-## 🔒 **Seguridad**
-
-- **JWT Authentication** con expiración de 24h
-- **Middleware de protección** por tipo de usuario
-- **Validación de rutas** según permisos
-- **Sanitización de datos** en formularios
-- **Manejo seguro de errores**
-
-## 📱 **Responsive Design**
-
-- ✅ Diseño adaptativo para móviles, tablets y desktop
-- ✅ Componentes optimizados para touch
-- ✅ Navegación intuitiva en todos los dispositivos
-- ✅ Modales responsivos con scroll
-
-## 🚀 **Despliegue**
-
-### **Vercel (Recomendado)**
+1. **Local**:
 \`\`\`bash
-npm run build
-vercel --prod
+# Instalar MongoDB
+brew install mongodb/brew/mongodb-community
+
+# Iniciar servicio
+brew services start mongodb/brew/mongodb-community
+
+# URI: mongodb://localhost:27017/medischedule
 \`\`\`
 
-### **Variables de Entorno en Producción**
-Solo es **obligatorio** configurar:
+2. **MongoDB Atlas** (Recomendado para producción):
+- Crear cuenta en [MongoDB Atlas](https://www.mongodb.com/atlas)
+- Crear cluster gratuito
+- Obtener connection string
+- Configurar en `MONGODB_URI`
+
+### Email (Nodemailer)
+
+1. **Gmail**:
 \`\`\`env
-JWT_SECRET=tu-clave-muy-segura-para-produccion
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=tu-email@gmail.com
+SMTP_PASS=tu-app-password
 \`\`\`
 
-Las demás variables son opcionales y el sistema funciona con simulaciones.
+2. **Generar App Password**:
+- Ir a Google Account Settings
+- Security → 2-Step Verification
+- App passwords → Generate
 
-## 🔄 **Datos de Ejemplo Incluidos**
+### WhatsApp (Twilio)
 
-El sistema incluye datos completos de ejemplo:
-- **5 Profesionales** de diferentes especialidades
-- **5 Citas** con diferentes estados
-- **3 Empresas** con información completa
-- **Métricas simuladas** para reportes
-- **Transacciones financieras** de ejemplo
+1. **Crear cuenta Twilio**:
+- Registrarse en [Twilio](https://www.twilio.com)
+- Obtener Account SID y Auth Token
+- Configurar WhatsApp Sandbox
 
-## 📞 **Soporte y Desarrollo**
-
-### **Estructura del Proyecto**
-\`\`\`
-medical-appointment-system/
-├── app/                    # Next.js App Router
-│   ├── api/               # API Routes
-│   ├── admin/             # Dashboard Admin
-│   ├── empresa/           # Dashboard Empresa
-│   └── profesional/       # Dashboard Profesional
-├── components/            # Componentes React
-│   ├── ui/               # shadcn/ui components
-│   ├── advanced-calendar.tsx
-│   └── reports-dashboard.tsx
-├── lib/                   # Utilidades
-│   ├── mongodb.ts        # DB con fallback
-│   ├── email.ts          # Email con simulación
-│   ├── twilio.ts         # WhatsApp con simulación
-│   └── pdf-generator.ts  # Generador de PDFs
-└── middleware.ts         # Protección de rutas
+2. **Configurar**:
+\`\`\`env
+TWILIO_ACCOUNT_SID=tu-account-sid
+TWILIO_AUTH_TOKEN=tu-auth-token
+TWILIO_WHATSAPP_NUMBER=+14155238886
 \`\`\`
 
-### **Comandos Útiles**
+## 🚀 Despliegue en Vercel
+
+1. **Conectar repositorio**:
+- Ir a [Vercel](https://vercel.com)
+- Import Git Repository
+- Seleccionar el repositorio
+
+2. **Configurar variables de entorno**:
+- En Vercel Dashboard → Settings → Environment Variables
+- Agregar todas las variables del `.env.example`
+
+3. **Deploy**:
+- Vercel desplegará automáticamente
+- Cada push a main activará un nuevo deploy
+
+## 📊 Uso del Sistema
+
+### Credenciales por Defecto
+
+**Administrador**:
+- Email: `admin@medischedule.com`
+- Password: `admin123`
+
+**Empresa (Hospital San Rafael)**:
+- Email: `admin@sanrafael.com`
+- Password: `sanrafael123`
+
+**Empresa (Clínica Norte)**:
+- Email: `admin@clinicanorte.com`
+- Password: `clinicanorte123`
+
+**Profesional**:
+- Email: `doctor1@sanrafael.com`
+- Password: `doctor123`
+
+### Flujo de Trabajo
+
+1. **Admin**: Crear empresas y gestionar sistema
+2. **Empresa**: Cargar profesionales masivamente y gestionar citas
+3. **Profesional**: Gestionar agenda personal y atender pacientes
+
+### Carga Masiva de Profesionales
+
+1. **Descargar plantilla CSV**
+2. **Completar datos**: Nombre, Especialidad, Email, Teléfono, Horas
+3. **Subir archivo** usando el botón "Carga Masiva"
+4. **Revisar resultados** y errores
+
+### Gestión de Citas
+
+1. **Crear cita**: Seleccionar profesional, fecha y hora
+2. **Confirmación automática**: Email y WhatsApp al paciente
+3. **Seguimiento**: Estados (Confirmada, Completada, Cancelada)
+4. **Reportes**: Estadísticas y análisis
+
+## 📈 Reportes Disponibles
+
+- **Citas**: Total, por estado, por especialidad
+- **Profesionales**: Rendimiento, calificaciones
+- **Ingresos**: Por mes, por especialidad
+- **Performance**: Tasas de completación y cancelación
+
+## 🔒 Seguridad
+
+- Autenticación JWT con expiración
+- Validación de datos en frontend y backend
+- Sanitización de inputs
+- Protección de rutas por rol
+- Headers de seguridad configurados
+
+## 🐛 Solución de Problemas
+
+### Error de Conexión MongoDB
 \`\`\`bash
-npm run dev          # Desarrollo
-npm run build        # Construcción
-npm run start        # Producción
-npm run lint         # Linting
+# Verificar que MongoDB esté ejecutándose
+brew services list | grep mongodb
+
+# Reiniciar servicio
+brew services restart mongodb/brew/mongodb-community
 \`\`\`
 
-## 🔄 **Próximas Funcionalidades**
+### Error de Email
+\`\`\`bash
+# Verificar credenciales SMTP
+# Generar nuevo App Password en Gmail
+# Verificar configuración 2FA
+\`\`\`
 
-- [ ] 📱 App móvil nativa
-- [ ] 🔔 Notificaciones push
-- [ ] 📊 Dashboard de métricas avanzadas
-- [ ] 🤖 IA para optimización de horarios
-- [ ] 💳 Integración con sistemas de pago
-- [ ] 📋 Historias clínicas digitales
-- [ ] 🎥 Telemedicina integrada
-- [ ] 📈 Analytics avanzados
+### Error de WhatsApp
+\`\`\`bash
+# Verificar Twilio Sandbox
+# Confirmar número de WhatsApp en Twilio Console
+# Revisar formato de número (+57...)
+\`\`\`
 
-## 🐛 **Solución de Problemas**
+## 🤝 Contribución
 
-### **Problemas Comunes**
+1. Fork el proyecto
+2. Crear rama feature (`git checkout -b feature/nueva-funcionalidad`)
+3. Commit cambios (`git commit -m 'Agregar nueva funcionalidad'`)
+4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
+5. Abrir Pull Request
 
-1. **Error de JWT**: Verifica que `JWT_SECRET` esté configurado
-2. **Problemas de MongoDB**: El sistema usa datos mock automáticamente
-3. **Emails no llegan**: Revisa configuración SMTP o usa simulación
-4. **WhatsApp no funciona**: Verifica credenciales Twilio o usa simulación
+## 📝 Licencia
 
-### **Logs del Sistema**
-El sistema muestra logs claros en consola:
-- ✅ Operaciones exitosas
-- ❌ Errores con detalles
-- 📝 Uso de datos mock cuando corresponde
-- 📧 Estado de notificaciones
+Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 
-## 🎯 **Casos de Uso**
+## 📞 Soporte
 
-### **Para Clínicas Pequeñas**
-- Gestión básica de citas
-- Control de profesionales
-- Reportes simples
-
-### **Para Centros Médicos**
-- Multi-especialidad
-- Gestión avanzada
-- Reportes detallados
-
-### **Para Hospitales**
-- Gestión compleja
-- Múltiples empresas
-- Analytics completos
+Para soporte técnico:
+- Email: soporte@medischedule.com
+- WhatsApp: +57 300 123 4567
+- Documentación: [docs.medischedule.com](https://docs.medischedule.com)
 
 ---
 
-**MediSchedule** - Transformando la gestión médica con tecnología moderna 🏥✨
-
-### **¡Sistema Completamente Funcional!**
-
-✅ **Instalación en 3 pasos**  
-✅ **Funciona sin configuración externa**  
-✅ **Datos de ejemplo incluidos**  
-✅ **Listo para producción**  
-
-¡Pruébalo ahora mismo! 🚀
+**Desarrollado con ❤️ para mejorar la gestión médica**
