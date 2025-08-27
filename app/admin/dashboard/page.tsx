@@ -37,34 +37,6 @@ import { useRouter } from "next/navigation"
 import ReportsDashboard from "@/components/reports-dashboard"
 import BulkUploadProfessionals from "@/components/bulk-upload-professionals"
 
-interface Professional {
-  id: number
-  name: string
-  specialty: string
-  email: string
-  phone: string
-  companyId: number
-  companyName: string
-  status: string
-  weeklyHours: number
-  rating: string
-  totalHoursThisMonth: number
-}
-
-interface Company {
-  id: number
-  name: string
-  email: string
-  phone: string
-  address: string
-  professionals: number
-  monthlyAppointments: number
-  status: string
-  description: string
-  nit: string
-  website: string
-}
-
 export default function AdminDashboard() {
   const router = useRouter()
   const [stats, setStats] = useState({
@@ -76,7 +48,7 @@ export default function AdminDashboard() {
     profesionalesActivos: 920,
   })
 
-  const [companies, setCompanies] = useState<Company[]>([
+  const [companies, setCompanies] = useState([
     {
       id: 1,
       name: "Hospital San Rafael",
@@ -105,12 +77,12 @@ export default function AdminDashboard() {
     },
   ])
 
-  const [professionals, setProfessionals] = useState<Professional[]>([])
+  const [professionals, setProfessionals] = useState([])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCompany, setSelectedCompany] = useState("")
   const [isCreateCompanyOpen, setIsCreateCompanyOpen] = useState(false)
   const [isEditCompanyOpen, setIsEditCompanyOpen] = useState(false)
-  const [editingCompany, setEditingCompany] = useState<Company | null>(null)
+  const [editingCompany, setEditingCompany] = useState(null)
   const [newCompany, setNewCompany] = useState({
     name: "",
     email: "",
@@ -136,7 +108,7 @@ export default function AdminDashboard() {
 
   const loadProfessionals = async () => {
     // Simular datos de profesionales
-    const mockProfessionals: Professional[] = Array.from({ length: 1000 }, (_, i) => ({
+    const mockProfessionals = Array.from({ length: 1000 }, (_, i) => ({
       id: i + 1,
       name: `Dr. Profesional ${i + 1}`,
       specialty: ["Cardiología", "Pediatría", "Neurología", "Ginecología", "Dermatología"][i % 5],
@@ -160,7 +132,7 @@ export default function AdminDashboard() {
 
   const handleCreateCompany = () => {
     const newId = Math.max(...companies.map((c) => c.id)) + 1
-    const companyToAdd: Company = {
+    const companyToAdd = {
       ...newCompany,
       id: newId,
       professionals: 0,
@@ -188,11 +160,11 @@ export default function AdminDashboard() {
     }
   }
 
-  const handleDeleteCompany = (id: number) => {
+  const handleDeleteCompany = (id) => {
     setCompanies(companies.filter((c) => c.id !== id))
   }
 
-  const handleBulkUploadComplete = (results: any[]) => {
+  const handleBulkUploadComplete = (results) => {
     // Actualizar estadísticas después de la carga masiva
     const successCount = results.filter((r) => r.success).length
     setStats((prev) => ({

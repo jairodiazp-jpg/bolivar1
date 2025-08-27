@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Calendar, Download, TrendingUp, Users, DollarSign, BarChart3 } from "lucide-react"
+import { Calendar, FileText, Download, TrendingUp, Users, DollarSign, BarChart3 } from "lucide-react"
 
 interface ReportsProps {
   userType: "admin" | "empresa"
@@ -90,53 +90,6 @@ export default function ReportsDashboard({ userType, companyId }: ReportsProps) 
 
   return (
     <div className="space-y-6">
-      {/* Quick Reports */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Citas Totales</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">6,140</div>
-            <p className="text-xs text-muted-foreground">+12% desde el mes pasado</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Profesionales Activos</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">920</div>
-            <p className="text-xs text-muted-foreground">+5% desde el mes pasado</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tasa de Ocupación</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">87%</div>
-            <p className="text-xs text-muted-foreground">+3% desde el mes pasado</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Satisfacción</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">4.8</div>
-            <p className="text-xs text-muted-foreground">+0.2 desde el mes pasado</p>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Report Types Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {reportTypes.map((report) => (
@@ -220,16 +173,88 @@ export default function ReportsDashboard({ userType, companyId }: ReportsProps) 
         </CardContent>
       </Card>
 
-      {/* Reportes Disponibles */}
+      {/* Quick Reports */}
       <Card>
         <CardHeader>
-          <CardTitle>Reportes Disponibles</CardTitle>
-          <CardDescription>Genera reportes detallados para análisis y seguimiento</CardDescription>
+          <CardTitle className="flex items-center space-x-2">
+            <FileText className="w-5 h-5" />
+            <span>Reportes Rápidos</span>
+          </CardTitle>
+          <CardDescription>Genera reportes predefinidos con un solo clic</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-gray-500">
-            <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>Los reportes detallados estarán disponibles próximamente</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Button
+              variant="outline"
+              className="h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"
+              onClick={() => {
+                setReportType("appointments")
+                setStartDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
+                setEndDate(new Date().toISOString().split("T")[0])
+                setTimeout(handleGenerateReport, 100)
+              }}
+            >
+              <Calendar className="w-6 h-6" />
+              <span className="text-sm">Citas Última Semana</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"
+              onClick={() => {
+                setReportType("appointments")
+                setStartDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0])
+                setEndDate(new Date().toISOString().split("T")[0])
+                setTimeout(handleGenerateReport, 100)
+              }}
+            >
+              <TrendingUp className="w-6 h-6" />
+              <span className="text-sm">Citas Este Mes</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"
+              onClick={() => {
+                setReportType("professionals")
+                setStartDate("")
+                setEndDate("")
+                setTimeout(handleGenerateReport, 100)
+              }}
+            >
+              <Users className="w-6 h-6" />
+              <span className="text-sm">Todos los Profesionales</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"
+              onClick={() => {
+                setReportType("metrics")
+                setStartDate("")
+                setEndDate("")
+                setTimeout(handleGenerateReport, 100)
+              }}
+            >
+              <BarChart3 className="w-6 h-6" />
+              <span className="text-sm">Métricas del Sistema</span>
+            </Button>
+
+            {userType === "admin" && (
+              <Button
+                variant="outline"
+                className="h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"
+                onClick={() => {
+                  setReportType("financial")
+                  setStartDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0])
+                  setEndDate(new Date().toISOString().split("T")[0])
+                  setTimeout(handleGenerateReport, 100)
+                }}
+              >
+                <DollarSign className="w-6 h-6" />
+                <span className="text-sm">Financiero Mensual</span>
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

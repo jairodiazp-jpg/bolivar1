@@ -1,122 +1,184 @@
 import { type NextRequest, NextResponse } from "next/server"
-
-// Mock database for professionals
-const professionals: any[] = []
+import { getDatabase } from "@/lib/mongodb"
+import { sendEmail, generateCredentialsEmailHTML } from "@/lib/email"
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const companyId = searchParams.get("companyId")
-    const search = searchParams.get("search")
+    const status = searchParams.get("status")
     const specialty = searchParams.get("specialty")
 
-    let filteredProfessionals = professionals
+    const db = await getDatabase()
+    const collection = db.collection("professionals")
+
+    const query: any = {}
 
     if (companyId) {
-      filteredProfessionals = filteredProfessionals.filter((prof) => prof.companyId === Number.parseInt(companyId))
+      query.companyId = Number.parseInt(companyId)
     }
 
-    if (search) {
-      filteredProfessionals = filteredProfessionals.filter(
-        (prof) =>
-          prof.name.toLowerCase().includes(search.toLowerCase()) ||
-          prof.email.toLowerCase().includes(search.toLowerCase()),
-      )
+    if (status) {
+      query.status = status
     }
 
     if (specialty) {
-      filteredProfessionals = filteredProfessionals.filter((prof) => prof.specialty === specialty)
+      query.specialty = specialty
     }
+
+    const professionals = await collection.find(query).toArray()
 
     return NextResponse.json({
       success: true,
-      data: filteredProfessionals,
-      total: filteredProfessionals.length,
+      data: professionals,
+      count: professionals.length,
     })
   } catch (error) {
     console.error("Error fetching professionals:", error)
-    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Error fetching professionals",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, specialty, email, phone, companyId, status = "active", weeklyHours = 40 } = body
 
-    // Validate required fields
-    if (!name || !specialty || !email || !phone) {
-      return NextResponse.json({ success: false, error: "Todos los campos son requeridos" }, { status: 400 })
+    // Validar campos requeridos
+    const requiredFields = ["name", "specialty", "email", "companyId"]
+    const missingFields = requiredFields.filter((field) => !body[field])
+
+    if (missingFields.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Missing required fields",
+          missingFields,
+        },
+        { status: 400 },
+      )
     }
 
-    // Check if email already exists
-    const existingProfessional = professionals.find((prof) => prof.email === email)
-    if (existingProfessional) {
-      return NextResponse.json({ success: false, error: "El email ya está registrado" }, { status: 400 })
-    }
+    // Generate automatic credentials
+    const username = generateUsername(body.name)
+    const password = generatePassword()
 
-    // Create new professional
     const newProfessional = {
-      id: professionals.length + 1,
-      name,
-      specialty,
-      email,
-      phone,
-      companyId: companyId || 1,
-      status,
-      weeklyHours,
-      rating: (Math.random() * 1.5 + 3.5).toFixed(1),
-      totalHoursThisMonth: Math.floor(Math.random() * 80) + 120,
-      createdAt: new Date().toISOString(),
+      ...body,
+      status: body.status || "active",
+      rating: body.rating || 0,
+      weeklyHours: body.weeklyHours || 40,
+      weeklyAppointments: body.weeklyAppointments || 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      credentials: {
+        username,
+        password,
+      },
     }
 
-    professionals.push(newProfessional)
+    const db = await getDatabase()
+    const collection = db.collection("professionals")
 
-    return NextResponse.json({
-      success: true,
-      data: newProfessional,
-      message: "Profesional creado exitosamente",
-    })
+    // Verificar si el email ya existe
+    const existingProfessional = await collection.findOne({ email: body.email })
+    if (existingProfessional) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Professional with this email already exists",
+        },
+        { status: 409 },
+      )
+    }
+
+    const result = await collection.insertOne(newProfessional)
+    const professionalWithId = { ...newProfessional, _id: result.insertedId }
+
+    // Send credentials via email
+    const credentialsResult = await sendCredentials(professionalWithId)
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: professionalWithId,
+        credentialsSent: credentialsResult,
+      },
+      { status: 201 },
+    )
   } catch (error) {
     console.error("Error creating professional:", error)
-    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Error creating professional",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { id, name, specialty, email, phone, status, weeklyHours } = body
+    const { _id, ...updateData } = body
 
-    if (!id) {
-      return NextResponse.json({ success: false, error: "ID es requerido" }, { status: 400 })
+    if (!_id) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "ID is required",
+        },
+        { status: 400 },
+      )
     }
 
-    const professionalIndex = professionals.findIndex((prof) => prof.id === id)
-    if (professionalIndex === -1) {
-      return NextResponse.json({ success: false, error: "Profesional no encontrado" }, { status: 404 })
+    const db = await getDatabase()
+    const collection = db.collection("professionals")
+
+    const result = await collection.updateOne(
+      { _id },
+      {
+        $set: {
+          ...updateData,
+          updatedAt: new Date(),
+        },
+      },
+    )
+
+    if (result.matchedCount === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Professional not found",
+        },
+        { status: 404 },
+      )
     }
 
-    // Update professional
-    professionals[professionalIndex] = {
-      ...professionals[professionalIndex],
-      name: name || professionals[professionalIndex].name,
-      specialty: specialty || professionals[professionalIndex].specialty,
-      email: email || professionals[professionalIndex].email,
-      phone: phone || professionals[professionalIndex].phone,
-      status: status || professionals[professionalIndex].status,
-      weeklyHours: weeklyHours || professionals[professionalIndex].weeklyHours,
-      updatedAt: new Date().toISOString(),
-    }
+    const updatedProfessional = await collection.findOne({ _id })
 
     return NextResponse.json({
       success: true,
-      data: professionals[professionalIndex],
-      message: "Profesional actualizado exitosamente",
+      data: updatedProfessional,
     })
   } catch (error) {
     console.error("Error updating professional:", error)
-    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Error updating professional",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
 
@@ -126,24 +188,84 @@ export async function DELETE(request: NextRequest) {
     const id = searchParams.get("id")
 
     if (!id) {
-      return NextResponse.json({ success: false, error: "ID es requerido" }, { status: 400 })
+      return NextResponse.json(
+        {
+          success: false,
+          error: "ID is required",
+        },
+        { status: 400 },
+      )
     }
 
-    const professionalIndex = professionals.findIndex((prof) => prof.id === Number.parseInt(id))
-    if (professionalIndex === -1) {
-      return NextResponse.json({ success: false, error: "Profesional no encontrado" }, { status: 404 })
-    }
+    const db = await getDatabase()
+    const collection = db.collection("professionals")
 
-    // Remove professional
-    const deletedProfessional = professionals.splice(professionalIndex, 1)[0]
+    const result = await collection.deleteOne({ _id: id })
+
+    if (result.deletedCount === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Professional not found",
+        },
+        { status: 404 },
+      )
+    }
 
     return NextResponse.json({
       success: true,
-      data: deletedProfessional,
-      message: "Profesional eliminado exitosamente",
+      message: "Professional deleted successfully",
     })
   } catch (error) {
     console.error("Error deleting professional:", error)
-    return NextResponse.json({ success: false, error: "Error interno del servidor" }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Error deleting professional",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
+  }
+}
+
+// Helper functions
+function generateUsername(name: string): string {
+  const cleanName = name
+    .toLowerCase()
+    .replace(/dr\.|dra\./g, "")
+    .trim()
+    .split(" ")
+
+  const firstName = cleanName[0] || ""
+  const lastName = cleanName[cleanName.length - 1] || ""
+
+  return firstName.charAt(0) + lastName + Math.floor(Math.random() * 100)
+}
+
+function generatePassword(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+  let password = ""
+  for (let i = 0; i < 12; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return password
+}
+
+async function sendCredentials(professional: any) {
+  try {
+    const emailHTML = generateCredentialsEmailHTML(professional)
+    const success = await sendEmail({
+      to: professional.email,
+      subject: "Credenciales de Acceso - MediSchedule",
+      html: emailHTML,
+      text: `Bienvenido al sistema MediSchedule. Usuario: ${professional.credentials.username}, Contraseña: ${professional.credentials.password}`,
+    })
+
+    console.log(`✅ Credentials sent to ${professional.email}: ${success}`)
+    return success
+  } catch (error) {
+    console.error("Error sending credentials:", error)
+    return false
   }
 }

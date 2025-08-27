@@ -41,7 +41,7 @@ interface UploadResult {
 
 interface BulkUploadProps {
   companyId?: number
-  onUploadComplete: (results: any[]) => void
+  onUploadComplete?: (results: UploadResult[]) => void
 }
 
 export default function BulkUploadProfessionals({ companyId, onUploadComplete }: BulkUploadProps) {
@@ -245,21 +245,10 @@ export default function BulkUploadProfessionals({ companyId, onUploadComplete }:
   const errorCount = validationResults.filter((r) => !r.success).length
   const successCount = validationResults.filter((r) => r.success && currentStep === "complete").length
 
-  const handleUpload = () => {
-    // Simulate successful upload
-    const mockResults = [
-      { success: true, name: "Dr. Juan Pérez", email: "juan@example.com" },
-      { success: true, name: "Dra. María García", email: "maria@example.com" },
-    ]
-
-    onUploadComplete(mockResults)
-    setIsOpen(false)
-  }
-
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-blue-600 hover:bg-blue-700">
           <Upload className="w-4 h-4 mr-2" />
           Carga Masiva
         </Button>
