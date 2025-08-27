@@ -35,6 +35,35 @@ import {
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import ReportsDashboard from "@/components/reports-dashboard"
+import BulkUploadProfessionals from "@/components/bulk-upload-professionals"
+
+interface Professional {
+  id: number
+  name: string
+  specialty: string
+  email: string
+  phone: string
+  companyId: number
+  companyName: string
+  status: string
+  weeklyHours: number
+  rating: string
+  totalHoursThisMonth: number
+}
+
+interface Company {
+  id: number
+  name: string
+  email: string
+  phone: string
+  address: string
+  professionals: number
+  monthlyAppointments: number
+  status: string
+  description: string
+  nit: string
+  website: string
+}
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -47,7 +76,7 @@ export default function AdminDashboard() {
     profesionalesActivos: 920,
   })
 
-  const [companies, setCompanies] = useState([
+  const [companies, setCompanies] = useState<Company[]>([
     {
       id: 1,
       name: "Hospital San Rafael",
@@ -76,12 +105,12 @@ export default function AdminDashboard() {
     },
   ])
 
-  const [professionals, setProfessionals] = useState([])
+  const [professionals, setProfessionals] = useState<Professional[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCompany, setSelectedCompany] = useState("")
   const [isCreateCompanyOpen, setIsCreateCompanyOpen] = useState(false)
   const [isEditCompanyOpen, setIsEditCompanyOpen] = useState(false)
-  const [editingCompany, setEditingCompany] = useState(null)
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null)
   const [newCompany, setNewCompany] = useState({
     name: "",
     email: "",
@@ -107,7 +136,7 @@ export default function AdminDashboard() {
 
   const loadProfessionals = async () => {
     // Simular datos de profesionales
-    const mockProfessionals = Array.from({ length: 1000 }, (_, i) => ({
+    const mockProfessionals: Professional[] = Array.from({ length: 1000 }, (_, i) => ({
       id: i + 1,
       name: `Dr. Profesional ${i + 1}`,
       specialty: ["Cardiología", "Pediatría", "Neurología", "Ginecología", "Dermatología"][i % 5],
@@ -131,7 +160,7 @@ export default function AdminDashboard() {
 
   const handleCreateCompany = () => {
     const newId = Math.max(...companies.map((c) => c.id)) + 1
-    const companyToAdd = {
+    const companyToAdd: Company = {
       ...newCompany,
       id: newId,
       professionals: 0,
@@ -159,8 +188,21 @@ export default function AdminDashboard() {
     }
   }
 
-  const handleDeleteCompany = (id) => {
+  const handleDeleteCompany = (id: number) => {
     setCompanies(companies.filter((c) => c.id !== id))
+  }
+
+  const handleBulkUploadComplete = (results: any[]) => {
+    // Actualizar estadísticas después de la carga masiva
+    const successCount = results.filter((r) => r.success).length
+    setStats((prev) => ({
+      ...prev,
+      totalProfesionales: prev.totalProfesionales + successCount,
+      profesionalesActivos: prev.profesionalesActivos + successCount,
+    }))
+
+    // Recargar la lista de profesionales
+    loadProfessionals()
   }
 
   const filteredProfessionals = professionals.filter((prof) => {
@@ -309,101 +351,104 @@ export default function AdminDashboard() {
                     </CardTitle>
                     <CardDescription>Administra las empresas registradas en el sistema</CardDescription>
                   </div>
-                  <Dialog open={isCreateCompanyOpen} onOpenChange={setIsCreateCompanyOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-green-600 hover:bg-green-700">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Nueva Empresa
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle>Crear Nueva Empresa</DialogTitle>
-                        <DialogDescription>
-                          Completa la información para registrar una nueva empresa médica
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="name">Nombre de la Empresa *</Label>
-                          <Input
-                            id="name"
-                            value={newCompany.name}
-                            onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })}
-                            placeholder="Hospital o Clínica"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="nit">NIT *</Label>
-                          <Input
-                            id="nit"
-                            value={newCompany.nit}
-                            onChange={(e) => setNewCompany({ ...newCompany, nit: e.target.value })}
-                            placeholder="900.123.456-7"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="email">Email Corporativo *</Label>
-                          <Input
-                            id="email"
-                            type="email"
-                            value={newCompany.email}
-                            onChange={(e) => setNewCompany({ ...newCompany, email: e.target.value })}
-                            placeholder="admin@empresa.com"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="phone">Teléfono *</Label>
-                          <Input
-                            id="phone"
-                            value={newCompany.phone}
-                            onChange={(e) => setNewCompany({ ...newCompany, phone: e.target.value })}
-                            placeholder="+57 1 234 5678"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="website">Sitio Web</Label>
-                          <Input
-                            id="website"
-                            value={newCompany.website}
-                            onChange={(e) => setNewCompany({ ...newCompany, website: e.target.value })}
-                            placeholder="https://empresa.com"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="address">Dirección *</Label>
-                          <Input
-                            id="address"
-                            value={newCompany.address}
-                            onChange={(e) => setNewCompany({ ...newCompany, address: e.target.value })}
-                            placeholder="Calle 123 #45-67, Ciudad"
-                          />
-                        </div>
-                        <div className="col-span-2 space-y-2">
-                          <Label htmlFor="description">Descripción</Label>
-                          <Textarea
-                            id="description"
-                            value={newCompany.description}
-                            onChange={(e) => setNewCompany({ ...newCompany, description: e.target.value })}
-                            placeholder="Descripción de la empresa y servicios"
-                            rows={3}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex justify-end space-x-2 mt-6">
-                        <Button variant="outline" onClick={() => setIsCreateCompanyOpen(false)}>
-                          Cancelar
+                  <div className="flex space-x-2">
+                    <BulkUploadProfessionals onUploadComplete={handleBulkUploadComplete} />
+                    <Dialog open={isCreateCompanyOpen} onOpenChange={setIsCreateCompanyOpen}>
+                      <DialogTrigger asChild>
+                        <Button className="bg-green-600 hover:bg-green-700">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Nueva Empresa
                         </Button>
-                        <Button
-                          onClick={handleCreateCompany}
-                          className="bg-green-600 hover:bg-green-700"
-                          disabled={!newCompany.name || !newCompany.email || !newCompany.phone}
-                        >
-                          Crear Empresa
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl">
+                        <DialogHeader>
+                          <DialogTitle>Crear Nueva Empresa</DialogTitle>
+                          <DialogDescription>
+                            Completa la información para registrar una nueva empresa médica
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="name">Nombre de la Empresa *</Label>
+                            <Input
+                              id="name"
+                              value={newCompany.name}
+                              onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })}
+                              placeholder="Hospital o Clínica"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="nit">NIT *</Label>
+                            <Input
+                              id="nit"
+                              value={newCompany.nit}
+                              onChange={(e) => setNewCompany({ ...newCompany, nit: e.target.value })}
+                              placeholder="900.123.456-7"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="email">Email Corporativo *</Label>
+                            <Input
+                              id="email"
+                              type="email"
+                              value={newCompany.email}
+                              onChange={(e) => setNewCompany({ ...newCompany, email: e.target.value })}
+                              placeholder="admin@empresa.com"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="phone">Teléfono *</Label>
+                            <Input
+                              id="phone"
+                              value={newCompany.phone}
+                              onChange={(e) => setNewCompany({ ...newCompany, phone: e.target.value })}
+                              placeholder="+57 1 234 5678"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="website">Sitio Web</Label>
+                            <Input
+                              id="website"
+                              value={newCompany.website}
+                              onChange={(e) => setNewCompany({ ...newCompany, website: e.target.value })}
+                              placeholder="https://empresa.com"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="address">Dirección *</Label>
+                            <Input
+                              id="address"
+                              value={newCompany.address}
+                              onChange={(e) => setNewCompany({ ...newCompany, address: e.target.value })}
+                              placeholder="Calle 123 #45-67, Ciudad"
+                            />
+                          </div>
+                          <div className="col-span-2 space-y-2">
+                            <Label htmlFor="description">Descripción</Label>
+                            <Textarea
+                              id="description"
+                              value={newCompany.description}
+                              onChange={(e) => setNewCompany({ ...newCompany, description: e.target.value })}
+                              placeholder="Descripción de la empresa y servicios"
+                              rows={3}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end space-x-2 mt-6">
+                          <Button variant="outline" onClick={() => setIsCreateCompanyOpen(false)}>
+                            Cancelar
+                          </Button>
+                          <Button
+                            onClick={handleCreateCompany}
+                            className="bg-green-600 hover:bg-green-700"
+                            disabled={!newCompany.name || !newCompany.email || !newCompany.phone}
+                          >
+                            Crear Empresa
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -434,6 +479,7 @@ export default function AdminDashboard() {
                         <Badge variant="secondary" className="bg-green-100 text-green-800">
                           {company.status === "active" ? "Activa" : "Inactiva"}
                         </Badge>
+                        <BulkUploadProfessionals companyId={company.id} onUploadComplete={handleBulkUploadComplete} />
                         <Button
                           variant="outline"
                           size="sm"
@@ -474,6 +520,7 @@ export default function AdminDashboard() {
                     <CardDescription>Administra todos los profesionales del sistema</CardDescription>
                   </div>
                   <div className="flex space-x-2">
+                    <BulkUploadProfessionals onUploadComplete={handleBulkUploadComplete} />
                     <div className="relative">
                       <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                       <Input
